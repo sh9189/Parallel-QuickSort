@@ -98,6 +98,7 @@ void printArray(int arr[],int numElements);
 
 mylob_logbarrier_t barr;
 int a[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
+int b[MAX_NUM];
 int *sumArr = new int[MAX_THREADS*2];
 
 void parallel_prefix_sum_main(int a[],int numElements,int numThreads)
@@ -303,20 +304,28 @@ int main()
 	for(int i=0;i<MAX_NUM;i++)
 	{
 		a[i] = i+1;
+		b[i] = a[i];
 	}
 	clock_t start = clock();
 	parallel_prefix_sum_main(a,MAX_NUM,MAX_THREADS);
 	clock_t end = clock();
-	double diff =(double)end - (double)start;
-	cout << "Parallel Time is " << diff;
+	double ptime =(double)end - (double)start;
+	cout << "Parallel Time is " << ptime;
 
 	start = clock();
 	for(int i=0;i<MAX_NUM;i++)
-		a[i+1] += a[i];
+		b[i+1] += b[i];
 	end = clock();
+	double stime = ((double)end - (double)start);
+	cout << "Serial Time is " << stime;
 
-	diff = ((double)end - (double)start);
-	cout << "Serial Time is " << diff;
+	cout << "Speedup is "<< stime/ptime <<endl;
+
+	for(int i=0;i<MAX_NUM;i++)
+	{
+		if(a[i]!=b[i])
+			cout << "Error " << "i is "<<i<< " parallel result is "<<a[i] << "serial result is " <<b[i]<<endl;
+	}
 
 }
 
