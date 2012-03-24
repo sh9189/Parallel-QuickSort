@@ -7,8 +7,9 @@
 #include <pthread.h>
 #include <iostream>
 #include <math.h>
+#include <time.h>
 using namespace std;
-#define MAX_NUM 500000000
+#define MAX_NUM 100000000
 #define MAX_THREADS 4
 
 typedef struct barrier_node {
@@ -299,8 +300,12 @@ int main()
 	{
 		a[i] = i+1;
 	}
-
+	clock_t start = clock();
 	parallel_prefix_sum_main(a,MAX_NUM,MAX_THREADS);
+	clock_t end = clock();
+	double diff =(double)end - (double)start;
+	cout << "Time is " << diff;
+
 
 }
 
