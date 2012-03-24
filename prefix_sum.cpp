@@ -86,24 +86,25 @@ struct thread_info_type
 	int start; // starting index of array
 	int end; // ending index of array
 	int threadId;
-	int * inputArr;
-	int * sumArr;
-	int numThreads;
+
 };
 
 void * parallel_prefix_sum(void *);
-void upSweep(int sumArr[],int numThreads,int myId);
-void downSweep(int sumArr[],int numThreads,int myId);
+void upSweep(int myId);
+void downSweep(int myId);
 void printArray(int arr[],int numElements);
 
 mylob_logbarrier_t barr;
-int a[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
-int b[MAX_NUM];
-int *sumArr = new int[MAX_THREADS*2];
+int inputArr[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
+int checkArr[MAX_NUM];
+int sumArr[MAX_THREADS*2];
 
-void parallel_prefix_sum_main(int a[],int numElements,int numThreads)
+void parallel_prefix_sum_main()
 {
 	mylib_init_barrier (barr);
+
+	int numElements = MAX_NUM;
+	int numThreads = MAX_THREADS;
 
 	//cout << "Input array is " << endl;
 	//printArray(a,numElements);
@@ -111,8 +112,8 @@ void parallel_prefix_sum_main(int a[],int numElements,int numThreads)
 	pthread_t *p_threads= new pthread_t[numThreads];
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
-	for(int i=0;i<2*numThreads;i++)
-		sumArr[i]=0;
+	//for(int i=0;i<2*numThreads;i++)
+		//sumArr[i]=0;
 	struct thread_info_type *threadInfoArr = new struct thread_info_type[numThreads];
 	int lastIndex = 0;
 
@@ -123,9 +124,6 @@ void parallel_prefix_sum_main(int a[],int numElements,int numThreads)
 		threadInfoArr[i].threadId = i;
 		threadInfoArr[i].start = lastIndex;
 		lastIndex+= (elementsPerThread -1);
-		threadInfoArr[i].inputArr = a;
-		threadInfoArr[i].sumArr = sumArr;
-		threadInfoArr[i].numThreads = numThreads;
 		if(excessElements > 0)
 		{
 			lastIndex++;
@@ -160,9 +158,7 @@ void * parallel_prefix_sum(void * arg)
 	int start = threadInfo.start; // start element Index
 	int end = threadInfo.end; // end element Index
 	int myId = threadInfo.threadId;
-	int * inputArr = threadInfo.inputArr;
-	int * sumArr = threadInfo.sumArr;
-	int numThreads = threadInfo.numThreads;
+	int numThreads = MAX_THREADS;
 	int numElements = end-start+1;
 	int middle = start + numElements/2; // middle element Index
 
@@ -176,15 +172,12 @@ void * parallel_prefix_sum(void * arg)
 
 
 	// compute local sum and put it in sum array
-	int firstHalfSum = 0 , secondHalfSum = 0;
+	/*int firstHalfSum = 0 , secondHalfSum = 0;
 	for(int i=start;i<middle;i++) // compute first half sum
 		firstHalfSum += inputArr[i];
 
 	for(int i=middle; i<= end;i++) // compute second half sum
-		secondHalfSum += inputArr[i];
-
-	sumArr[2*myId] = firstHalfSum;
-	sumArr[2*myId + 1] = secondHalfSum;
+		secondHalfSum += inputArr[i];*/
 
 	// compute local prefix sums
 
@@ -193,6 +186,9 @@ void * parallel_prefix_sum(void * arg)
 
 	for(int i=middle+1;i<=end;i++)
 		inputArr[i]+=inputArr[i-1];
+
+	sumArr[2*myId] = inputArr[middle-1];
+	sumArr[2*myId + 1] = inputArr[end];
 
 
 	//barrier to synchronize local sums
@@ -210,7 +206,7 @@ void * parallel_prefix_sum(void * arg)
 	 */
 	// up sweep
 
-	upSweep(sumArr,numThreads,myId);
+	upSweep(myId);
 
 	/*cout << "After Up sweep Sum array is" <<endl;
 	for(int i=0;i<2*numThreads;i++)
@@ -219,7 +215,7 @@ void * parallel_prefix_sum(void * arg)
 	// down sweep
 	 */
 
-	downSweep(sumArr,numThreads,myId);
+	downSweep(myId);
 
 	/*cout << "After Down sweep Sum array is" <<endl;
 	for(int i=0;i<2*numThreads;i++)
@@ -239,24 +235,31 @@ void * parallel_prefix_sum(void * arg)
 }
 
 
-void downSweep(int sumArr[],int numThreads,int myId)
+void downSweep(int myId)
 {
+	int numThreads = MAX_THREADS;
 	int numElements = 2*numThreads;
 	//sumArr[numElements-1] = 0;
 	//mylib_logbarrier(barr, numThreads, myId);
 	int numSteps = log2(numElements) - 1;
-
+	int pow1 = pow(2, numSteps+1),pow2;
+	int index1,index2,dec_i,temp;
 	for(int d = numSteps ; d >= 0;d--)
 	{
-		int pow1 = pow(2,d+1);
-		int pow2 = pow(2,d);
+		//int pow1 = pow(2,d+1);
+		//int pow2 = pow(2,d);
+		pow2 = pow1/2;
+
 		for(int i=0 ; i < 2*numThreads ; i+= pow1)
 		{
 			if( i== 2*myId)
 			{
-				int temp = sumArr[i+pow2-1];
-				sumArr[i+pow2-1] = sumArr[i+pow1-1];
-				sumArr[i+pow1-1] += temp;
+				dec_i = i-1;
+				index2 = pow2+dec_i;
+				index1 = pow1+dec_i;
+				temp = sumArr[index2];
+				sumArr[index2] = sumArr[index1];
+				sumArr[index1] += temp;
 			}
 		}
 		mylib_logbarrier(barr, numThreads, myId);
@@ -264,24 +267,31 @@ void downSweep(int sumArr[],int numThreads,int myId)
 		for(int i=0;i<2*numThreads;i++)
 			cout << sumArr[i] << " ";
 		cout << endl;*/
+		pow1 = pow2;
 	}
 
 }
 
-void upSweep(int sumArr[],int numThreads,int myId)
+void upSweep(int myId)
 {
+	int numThreads = MAX_THREADS;
 	int numElements = 2*numThreads;
 	int numSteps = log2(numElements);
-	int  i = 2*myId;;
+	int  i = 2*myId;
+	int pow2 = 1,pow1;
+	int index,dec_i;
 	for(int d = 0; d < numSteps;d++)
 	{
-		int pow1 = pow(2,d+1);
-		int pow2 = pow(2,d);
+		//int pow1 = pow(2,d+1);
+		//int pow2 = pow(2,d);
+		pow1 = 2*pow2;
 		if( d == numSteps-1)
 			sumArr[numElements-1]=0;
 		else
 		{
-			sumArr[i+pow1-1] = sumArr[i+pow2-1]+sumArr[i+pow1-1];
+			dec_i = i-1;
+			index = dec_i+pow1;
+			sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
 		}
 		mylib_logbarrier(barr, numThreads, myId);
 		if(myId % pow1==0)
@@ -292,6 +302,7 @@ void upSweep(int sumArr[],int numThreads,int myId)
 		}
 
 		i-=pow1;
+		pow2=pow1;
 	}
 
 }
@@ -303,18 +314,18 @@ int main()
 {
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		a[i] = i+1;
-		b[i] = a[i];
+		inputArr[i] = i+1;
+		checkArr[i] = inputArr[i];
 	}
 	clock_t start = clock();
-	parallel_prefix_sum_main(a,MAX_NUM,MAX_THREADS);
+	parallel_prefix_sum_main();
 	clock_t end = clock();
 	double ptime =(double)end - (double)start;
 	cout << "Parallel Time is " << ptime;
 
 	start = clock();
 	for(int i=0;i<MAX_NUM;i++)
-		b[i+1] += b[i];
+		checkArr[i+1] += checkArr[i];
 	end = clock();
 	double stime = ((double)end - (double)start);
 	cout << "Serial Time is " << stime;
@@ -323,8 +334,8 @@ int main()
 
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		if(a[i]!=b[i])
-			cout << "Error " << "i is "<<i<< " parallel result is "<<a[i] << "serial result is " <<b[i]<<endl;
+		if(inputArr[i]!=checkArr[i])
+			cout << "Error " << "i is "<<i<< " parallel result is "<<inputArr[i] << "serial result is " <<checkArr[i]<<endl;
 	}
 
 }
