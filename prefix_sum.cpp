@@ -1,0 +1,308 @@
+/*
+ * prefix_sum.cpp
+ *
+ *  Created on: Mar 23, 2012
+ *      Author: skhajamo
+ */
+#include <pthread.h>
+#include <iostream>
+#include <math.h>
+using namespace std;
+#define MAX_NUM 500000000
+#define MAX_THREADS 4
+
+typedef struct barrier_node {
+	pthread_mutex_t count_lock;
+	pthread_cond_t ok_to_proceed_up;
+	pthread_cond_t ok_to_proceed_down;
+	int count;
+} mylib_barrier_t_internal;
+
+typedef struct barrier_node mylob_logbarrier_t[MAX_THREADS];
+
+
+void mylib_init_barrier(mylob_logbarrier_t b)
+{
+	int i;
+	for (i = 0; i < MAX_THREADS; i++) {
+		b[i].count = 0;
+		pthread_mutex_init(&(b[i].count_lock), NULL);
+		pthread_cond_init(&(b[i].ok_to_proceed_up), NULL);
+		pthread_cond_init(&(b[i].ok_to_proceed_down), NULL);
+	}
+}
+
+void mylib_logbarrier (mylob_logbarrier_t b, int num_threads, int thread_id)
+{
+	int i, base, index;
+	i = 2;
+	base = 0;
+
+	do {
+		index = base + thread_id / i;
+		if (thread_id % i == 0) {
+			pthread_mutex_lock(&(b[index].count_lock));
+			b[index].count ++;
+			while (b[index].count < 2)
+				pthread_cond_wait(&(b[index].ok_to_proceed_up),
+						&(b[index].count_lock));
+			pthread_mutex_unlock(&(b[index].count_lock));
+		}
+		else {
+			pthread_mutex_lock(&(b[index].count_lock));
+			b[index].count ++;
+			if (b[index].count == 2)
+				pthread_cond_signal(&(b[index].ok_to_proceed_up));
+			/*
+			while (b[index].count != 0)
+			 */
+			while (
+					pthread_cond_wait(&(b[index].ok_to_proceed_down),
+							&(b[index].count_lock)) != 0);
+			pthread_mutex_unlock(&(b[index].count_lock));
+			break;
+		}
+		base = base + MAX_THREADS/i;
+		i = i * 2;
+	} while (i <= MAX_THREADS);
+
+	i = i / 2;
+
+	for (; i > 1; i = i / 2)
+	{
+		base = base - MAX_THREADS/i;
+		index = base + thread_id / i;
+		pthread_mutex_lock(&(b[index].count_lock));
+		b[index].count = 0;
+		pthread_cond_signal(&(b[index].ok_to_proceed_down));
+		pthread_mutex_unlock(&(b[index].count_lock));
+	}
+}
+
+
+struct thread_info_type
+{
+	int start; // starting index of array
+	int end; // ending index of array
+	int threadId;
+	int * inputArr;
+	int * sumArr;
+	int numThreads;
+};
+
+void * parallel_prefix_sum(void *);
+void upSweep(int sumArr[],int numThreads,int myId);
+void downSweep(int sumArr[],int numThreads,int myId);
+void printArray(int arr[],int numElements);
+
+mylob_logbarrier_t barr;
+int a[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
+int *sumArr = new int[MAX_THREADS*2];
+
+void parallel_prefix_sum_main(int a[],int numElements,int numThreads)
+{
+	mylib_init_barrier (barr);
+
+	//cout << "Input array is " << endl;
+	//printArray(a,numElements);
+
+	pthread_t *p_threads= new pthread_t[numThreads];
+	int elementsPerThread = numElements/numThreads;
+	int excessElements = numElements%numThreads;
+	for(int i=0;i<2*numThreads;i++)
+		sumArr[i]=0;
+	struct thread_info_type *threadInfoArr = new struct thread_info_type[numThreads];
+	int lastIndex = 0;
+
+	// assign ranges and create threads
+	for(int i=0;i<numThreads;i++)
+	{
+
+		threadInfoArr[i].threadId = i;
+		threadInfoArr[i].start = lastIndex;
+		lastIndex+= (elementsPerThread -1);
+		threadInfoArr[i].inputArr = a;
+		threadInfoArr[i].sumArr = sumArr;
+		threadInfoArr[i].numThreads = numThreads;
+		if(excessElements > 0)
+		{
+			lastIndex++;
+			excessElements--;
+		}
+		threadInfoArr[i].end = lastIndex;
+
+		pthread_create(&p_threads[i],NULL,parallel_prefix_sum,(void *)&(threadInfoArr[i]));
+		lastIndex++; // increment lastIndex so that it is ready for next iteration
+	}
+	for (int i=0; i< numThreads; i++)
+		pthread_join(p_threads[i], NULL);
+
+	//cout << "Prefix Sum array is " << endl;
+	//printArray(a,numElements);
+}
+
+
+void printArray(int arr[],int numElements)
+{
+	for(int i=0;i<numElements;i++)
+		cout << arr[i] << " ";
+	cout << endl;
+}
+
+void * parallel_prefix_sum(void * arg)
+{
+	struct thread_info_type threadInfo = *((struct thread_info_type *)arg);
+
+	//cout << "Start is " << threadInfo.start << " End is " << threadInfo.end << " id is" << threadInfo.threadId<<endl;
+
+	int start = threadInfo.start; // start element Index
+	int end = threadInfo.end; // end element Index
+	int myId = threadInfo.threadId;
+	int * inputArr = threadInfo.inputArr;
+	int * sumArr = threadInfo.sumArr;
+	int numThreads = threadInfo.numThreads;
+	int numElements = end-start+1;
+	int middle = start + numElements/2; // middle element Index
+
+	/*cout << "First Half" << endl;
+	for(int i=start;i< middle;i++)
+		cout<< myId << " " << inputArr[i] << endl;
+
+	cout << "Second Half" << endl;
+	for(int i=middle;i<= end;i++)
+		cout<< myId << " " << inputArr[i] << endl;*/
+
+
+	// compute local sum and put it in sum array
+	int firstHalfSum = 0 , secondHalfSum = 0;
+	for(int i=start;i<middle;i++) // compute first half sum
+		firstHalfSum += inputArr[i];
+
+	for(int i=middle; i<= end;i++) // compute second half sum
+		secondHalfSum += inputArr[i];
+
+	sumArr[2*myId] = firstHalfSum;
+	sumArr[2*myId + 1] = secondHalfSum;
+
+	// compute local prefix sums
+
+	for(int i=start+1;i<middle;i++)
+		inputArr[i]+=inputArr[i-1];
+
+	for(int i=middle+1;i<=end;i++)
+		inputArr[i]+=inputArr[i-1];
+
+
+	//barrier to synchronize local sums
+	mylib_logbarrier(barr, numThreads, myId);
+
+	/*cout << "Sum array is ";
+	for(int i=0;i<2*numThreads;i++)
+		cout << sumArr[i] << " ";
+	cout << endl;
+
+	cout << "Input array is ";
+	for(int i=0;i<MAX_NUM;i++)
+		cout << inputArr[i] << " ";
+	cout << endl;
+	 */
+	// up sweep
+
+	upSweep(sumArr,numThreads,myId);
+
+	/*cout << "After Up sweep Sum array is" <<endl;
+	for(int i=0;i<2*numThreads;i++)
+		cout << sumArr[i] << " ";
+	cout << endl;
+	// down sweep
+	 */
+
+	downSweep(sumArr,numThreads,myId);
+
+	/*cout << "After Down sweep Sum array is" <<endl;
+	for(int i=0;i<2*numThreads;i++)
+		cout << sumArr[i] << " ";
+	cout << endl;*/
+	//compute complete prefix sum
+	for(int i=start;i<middle;i++)
+		inputArr[i]+= sumArr[2*myId];
+	for(int i=middle;i<=end;i++)
+		inputArr[i]+= sumArr[2*myId+1];
+
+	/*cout << "Input array is ";
+	for(int i=0;i<MAX_NUM;i++)
+		cout << inputArr[i] << " ";
+	cout << endl;*/
+
+}
+
+
+void downSweep(int sumArr[],int numThreads,int myId)
+{
+	int numElements = 2*numThreads;
+	//sumArr[numElements-1] = 0;
+	//mylib_logbarrier(barr, numThreads, myId);
+	int numSteps = log2(numElements) - 1;
+
+	for(int d = numSteps ; d >= 0;d--)
+	{
+		int pow1 = pow(2,d+1);
+		int pow2 = pow(2,d);
+		for(int i=0 ; i < 2*numThreads ; i+= pow1)
+		{
+			if( i== 2*myId)
+			{
+				int temp = sumArr[i+pow2-1];
+				sumArr[i+pow2-1] = sumArr[i+pow1-1];
+				sumArr[i+pow1-1] += temp;
+			}
+		}
+		mylib_logbarrier(barr, numThreads, myId);
+		/*cout << "After Down sweep Sum array is" <<endl;
+		for(int i=0;i<2*numThreads;i++)
+			cout << sumArr[i] << " ";
+		cout << endl;*/
+	}
+
+}
+
+void upSweep(int sumArr[],int numThreads,int myId)
+{
+	int numElements = 2*numThreads;
+	int numSteps = log2(numElements);
+	for(int d = 0; d < numSteps;d++)
+	{
+		int pow1 = pow(2,d+1);
+		int pow2 = pow(2,d);
+		if( d == numSteps-1)
+			sumArr[numElements-1]=0;
+		else
+		{
+
+			for(int i=0 ; i < numElements ; i+= pow1)
+			{
+				if( i== 2*myId)
+				{
+					sumArr[i+pow1-1] = sumArr[i+pow2-1]+sumArr[i+pow1-1];
+				}
+			}
+		}
+		mylib_logbarrier(barr, numThreads, myId);
+	}
+}
+
+
+
+int main()
+{
+	for(int i=0;i<MAX_NUM;i++)
+	{
+		a[i] = i+1;
+	}
+
+	parallel_prefix_sum_main(a,MAX_NUM,MAX_THREADS);
+
+}
+
+
+
