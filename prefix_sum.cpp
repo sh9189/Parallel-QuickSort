@@ -9,7 +9,7 @@
 #include <math.h>
 #include <time.h>
 using namespace std;
-#define MAX_NUM 100000000
+#define MAX_NUM 1000000
 #define MAX_THREADS 4
 
 typedef struct barrier_node {
@@ -271,6 +271,7 @@ void upSweep(int sumArr[],int numThreads,int myId)
 {
 	int numElements = 2*numThreads;
 	int numSteps = log2(numElements);
+	int  i = 2*myId;;
 	for(int d = 0; d < numSteps;d++)
 	{
 		int pow1 = pow(2,d+1);
@@ -279,18 +280,21 @@ void upSweep(int sumArr[],int numThreads,int myId)
 			sumArr[numElements-1]=0;
 		else
 		{
-
-			for(int i=0 ; i < numElements ; i+= pow1)
-			{
-				if( i== 2*myId)
-				{
-					sumArr[i+pow1-1] = sumArr[i+pow2-1]+sumArr[i+pow1-1];
-				}
-			}
+			sumArr[i+pow1-1] = sumArr[i+pow2-1]+sumArr[i+pow1-1];
 		}
 		mylib_logbarrier(barr, numThreads, myId);
+		if(myId % pow1==0)
+		{
+			d++;
+			for(;d<numSteps;d++)
+				mylib_logbarrier(barr, numThreads, myId);
+		}
+
+		i-=pow1;
 	}
+
 }
+
 
 
 
@@ -304,8 +308,15 @@ int main()
 	parallel_prefix_sum_main(a,MAX_NUM,MAX_THREADS);
 	clock_t end = clock();
 	double diff =(double)end - (double)start;
-	cout << "Time is " << diff;
+	cout << "Parallel Time is " << diff;
 
+	start = clock();
+	for(int i=0;i<MAX_NUM;i++)
+		a[i+1] += a[i];
+	end = clock();
+
+	diff = ((double)end - (double)start);
+	cout << "Serial Time is " << diff;
 
 }
 
