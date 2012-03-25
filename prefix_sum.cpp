@@ -14,75 +14,6 @@ using namespace std;
 #define MAX_NUM 64
 #define MAX_THREADS 8
 
-typedef struct barrier_node {
-	pthread_mutex_t count_lock;
-	pthread_cond_t ok_to_proceed_up;
-	pthread_cond_t ok_to_proceed_down;
-	int count;
-} mylib_barrier_t_internal;
-
-typedef struct barrier_node mylob_logbarrier_t[MAX_THREADS];
-
-
-void mylib_init_barrier(mylob_logbarrier_t b)
-{
-	int i;
-	for (i = 0; i < MAX_THREADS; i++) {
-		b[i].count = 0;
-		pthread_mutex_init(&(b[i].count_lock), NULL);
-		pthread_cond_init(&(b[i].ok_to_proceed_up), NULL);
-		pthread_cond_init(&(b[i].ok_to_proceed_down), NULL);
-	}
-}
-
-void mylib_logbarrier (mylob_logbarrier_t b, int num_threads, int thread_id)
-{
-	int i, base, index;
-	i = 2;
-	base = 0;
-
-	do {
-		index = base + thread_id / i;
-		if (thread_id % i == 0) {
-			pthread_mutex_lock(&(b[index].count_lock));
-			b[index].count ++;
-			while (b[index].count < 2)
-				pthread_cond_wait(&(b[index].ok_to_proceed_up),
-						&(b[index].count_lock));
-			pthread_mutex_unlock(&(b[index].count_lock));
-		}
-		else {
-			pthread_mutex_lock(&(b[index].count_lock));
-			b[index].count ++;
-			if (b[index].count == 2)
-				pthread_cond_signal(&(b[index].ok_to_proceed_up));
-			/*
-			while (b[index].count != 0)
-			 */
-			while (
-					pthread_cond_wait(&(b[index].ok_to_proceed_down),
-							&(b[index].count_lock)) != 0);
-			pthread_mutex_unlock(&(b[index].count_lock));
-			break;
-		}
-		base = base + MAX_THREADS/i;
-		i = i * 2;
-	} while (i <= MAX_THREADS);
-
-	i = i / 2;
-
-	for (; i > 1; i = i / 2)
-	{
-		base = base - MAX_THREADS/i;
-		index = base + thread_id / i;
-		pthread_mutex_lock(&(b[index].count_lock));
-		b[index].count = 0;
-		pthread_cond_signal(&(b[index].ok_to_proceed_down));
-		pthread_mutex_unlock(&(b[index].count_lock));
-	}
-}
-
-
 struct thread_info_type
 {
 	int start; // starting index of array
@@ -92,8 +23,6 @@ struct thread_info_type
 };
 
 void * parallel_prefix_sum(void *);
-void upSweep(int myId);
-void downSweep(int myId);
 void printArray(int arr[],int numElements);
 
 pthread_barrier_t barr;
@@ -244,106 +173,11 @@ void * parallel_prefix_sum(void * arg)
 }
 
 
-void downSweep(int myId)
-{
-	int numThreads = MAX_THREADS;
-	int numElements = 2*numThreads;
-	//sumArr[numElements-1] = 0;
-	//mylib_logbarrier(barr, numThreads, myId);
-	int numSteps = log2(numElements) - 1;
-	int pow1 = pow(2, numSteps+1),pow2;
-	int index1,index2,dec_i,temp;
-	for(int d = numSteps ; d >= 0;d--)
-	{
-		//int pow1 = pow(2,d+1);
-		//int pow2 = pow(2,d);
-		pow2 = pow1/2;
-
-		for(int i=0 ; i < 2*numThreads ; i+= pow1)
-		{
-			if( i== 2*myId)
-			{
-				dec_i = i-1;
-				index2 = pow2+dec_i;
-				index1 = pow1+dec_i;
-				temp = sumArr[index2];
-				sumArr[index2] = sumArr[index1];
-				sumArr[index1] += temp;
-			}
-		}
-		//mylib_logbarrier(barr, numThreads, myId);
-		pow1 = pow2;
-	}
-
-}
-
-void upSweep(int myId)
-{
-	int numThreads = MAX_THREADS;
-	int numElements = 2*numThreads;
-	int numSteps = log2(numElements);
-	//int  i = 2*myId;
-	int pow2 = 1,pow1;
-	int index,dec_i;
-	/*for(int d = 0; d < numSteps;d++)
-	{
-		//int pow1 = pow(2,d+1);
-		//int pow2 = pow(2,d);
-		pow1 = 2*pow2;
-		if( d == numSteps-1)
-			sumArr[numElements-1]=0;
-		else
-		{
-			dec_i = i-1;
-			index = dec_i+pow1;
-			sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
-		}
-		mylib_logbarrier(barr, numThreads, myId);
-		if(myId % pow1==0)
-		{
-			d++;
-			for(;d<numSteps;d++)
-				mylib_logbarrier(barr, numThreads, myId);
-		}
-
-		i-=pow1;
-		pow2=pow1;
-	}*/
-	for(int d = 0; d < numSteps;d++)
-	{
-		//int pow1 = pow(2,d+1);
-		//int pow2 = pow(2,d);
-		pow1 = 2*pow2;
-		if( d == numSteps-1)
-			sumArr[numElements-1]=0;
-		else
-		{
-			for(int i=0 ; i < 2*numThreads ; i+= pow1)
-			{
-				if( i== 2*myId)
-				{
-					dec_i = i-1;
-					index = dec_i+pow1;
-					sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
-				}
-			}
-		}
-		//mylib_logbarrier(barr, numThreads, myId);
-		pow2=pow1;
-	}
-
-
-
-}
-
-
-
-
 int main()
 {
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = i+1;
+		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 	}
 	struct timeval tz;
