@@ -12,7 +12,7 @@
 using namespace std;
 
 #define MAX_NUM 64
-#define MAX_THREADS 4
+#define MAX_THREADS 8
 
 typedef struct barrier_node {
 	pthread_mutex_t count_lock;
@@ -179,11 +179,11 @@ void * parallel_prefix_sum(void * arg)
 
 	cout << "Input array is ";
 	for(int i=0;i<MAX_NUM;i++)
-		cout << i << " ";
+		cout << inputArr[i] << " ";
 	cout << endl;*/
 
 	// up sweep
-	int numSteps = log2(numElements);
+	int numSteps = log2(numThreads);
 	int pow2 = 1,pow1;
 	int index,dec_i;
 
@@ -191,7 +191,7 @@ void * parallel_prefix_sum(void * arg)
 	{
 		pow1 = 2*pow2;
 		if( d == numSteps-1)
-			sumArr[numElements-1]=0;
+			sumArr[numThreads-1]=0;
 		else
 		{
 			if(myId% pow1 ==0)
@@ -238,8 +238,6 @@ void * parallel_prefix_sum(void * arg)
 	//compute complete prefix sum
 	for(int i=start;i<=end;i++)
 		inputArr[i]+= sumArr[myId];
-
-
 }
 
 
@@ -271,10 +269,6 @@ void downSweep(int myId)
 			}
 		}
 		mylib_logbarrier(barr, numThreads, myId);
-		/*cout << "After Down sweep Sum array is" <<endl;
-		for(int i=0;i<2*numThreads;i++)
-			cout << sumArr[i] << " ";
-		cout << endl;*/
 		pow1 = pow2;
 	}
 
