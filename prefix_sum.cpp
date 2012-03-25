@@ -11,8 +11,8 @@
 #include <sys/time.h>
 using namespace std;
 
-#define MAX_NUM 64
-#define MAX_THREADS 8
+#define MAX_NUM 1024
+#define MAX_THREADS 5
 
 struct thread_info_type
 {
@@ -28,7 +28,10 @@ void printArray(int arr[],int numElements);
 pthread_barrier_t barr;
 int inputArr[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
 int checkArr[MAX_NUM];
-int sumArr[MAX_THREADS];
+int sumArrSize = pow(2,ceil(log2(MAX_THREADS)));
+
+
+int * sumArr = new int[sumArrSize];
 
 void parallel_prefix_sum_main()
 {
@@ -105,7 +108,7 @@ void * parallel_prefix_sum(void * arg)
 	pthread_barrier_wait(&barr);
 
 	/*cout << "Sum array is ";
-	for(int i=0;i<numThreads;i++)
+	for(int i=0;i<sumArrSize;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;
 
@@ -115,7 +118,7 @@ void * parallel_prefix_sum(void * arg)
 	cout << endl;*/
 
 	// up sweep
-	int numSteps = log2(numThreads);
+	int numSteps = log2(sumArrSize);
 	int pow2 = 1,pow1;
 	int index,dec_i;
 
@@ -123,7 +126,7 @@ void * parallel_prefix_sum(void * arg)
 	{
 		pow1 = 2*pow2;
 		if( d == numSteps-1)
-			sumArr[numThreads-1]=0;
+			sumArr[sumArrSize-1]=0;
 		else
 		{
 			if(myId% pow1 ==0)
@@ -139,7 +142,7 @@ void * parallel_prefix_sum(void * arg)
 	}
 
 	/*cout << "Id is " << myId << " After Up sweep Sum array is" <<endl;
-	for(int i=0;i<numThreads;i++)
+	for(int i=0;i<sumArrSize;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;*/
 	// down sweep
@@ -162,8 +165,9 @@ void * parallel_prefix_sum(void * arg)
 		pow1 = pow2;
 	}
 
-	/*cout <<  "Id is " << myId << "After Down sweep Sum array is" <<endl;
-	for(int i=0;i<numThreads;i++)
+	/*
+	cout <<  "Id is " << myId << "After Down sweep Sum array is" <<endl;
+	for(int i=0;i<sumArrSize;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;*/
 
@@ -175,9 +179,10 @@ void * parallel_prefix_sum(void * arg)
 
 int main()
 {
+	//cout << "Sum Arr size is "<< sumArrSize << endl;
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = 1;
+		inputArr[i] = i+1;
 		checkArr[i] = inputArr[i];
 	}
 	struct timeval tz;
