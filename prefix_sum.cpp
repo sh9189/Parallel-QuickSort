@@ -353,8 +353,6 @@ int main()
 		inputArr[i] = i+1;
 		checkArr[i] = inputArr[i];
 	}
-
-
 	struct timeval tz;
 	struct timezone tx;
 	double start_time, end_time;
@@ -370,9 +368,11 @@ int main()
 
 	cout << "Parallel Time is " << ptime;
 
+	gettimeofday(&tz, &tx);
 	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	for(int i=0;i<MAX_NUM;i++)
 		checkArr[i+1] += checkArr[i];
+	gettimeofday(&tz, &tx);
 	end_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	double stime = ((double)end_time - (double)start_time);
 	cout << "Serial Time is " << stime;
