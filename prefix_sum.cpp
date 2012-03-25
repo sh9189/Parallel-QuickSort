@@ -10,14 +10,10 @@
 #include <time.h>
 #include <sys/time.h>
 using namespace std;
-<<<<<<< HEAD
+
 #define MAX_NUM 64
 #define MAX_THREADS 4
 
-=======
-#define MAX_NUM 250000000
-#define MAX_THREADS 4 
->>>>>>> 0cd41bb7ee7582a82b3283429ac5361476d3e05f
 typedef struct barrier_node {
 	pthread_mutex_t count_lock;
 	pthread_cond_t ok_to_proceed_up;
