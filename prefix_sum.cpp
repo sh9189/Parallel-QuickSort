@@ -8,8 +8,9 @@
 #include <iostream>
 #include <math.h>
 #include <time.h>
+#include <sys/time.h>
 using namespace std;
-#define MAX_NUM 1000000
+#define MAX_NUM 100000000
 #define MAX_THREADS 4
 
 typedef struct barrier_node {
@@ -113,7 +114,7 @@ void parallel_prefix_sum_main()
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
 	//for(int i=0;i<2*numThreads;i++)
-		//sumArr[i]=0;
+	//sumArr[i]=0;
 	struct thread_info_type *threadInfoArr = new struct thread_info_type[numThreads];
 	int lastIndex = 0;
 
@@ -153,7 +154,7 @@ void * parallel_prefix_sum(void * arg)
 {
 	struct thread_info_type threadInfo = *((struct thread_info_type *)arg);
 
-	//cout << "Start is " << threadInfo.start << " End is " << threadInfo.end << " id is" << threadInfo.threadId<<endl;
+
 
 	int start = threadInfo.start; // start element Index
 	int end = threadInfo.end; // end element Index
@@ -161,6 +162,8 @@ void * parallel_prefix_sum(void * arg)
 	int numThreads = MAX_THREADS;
 	int numElements = end-start+1;
 	int middle = start + numElements/2; // middle element Index
+
+	//cout << "Start is " << start << " End is " << end << " middle is "<<middle<<" id is" << myId<<endl;
 
 	/*cout << "First Half" << endl;
 	for(int i=start;i< middle;i++)
@@ -187,8 +190,16 @@ void * parallel_prefix_sum(void * arg)
 	for(int i=middle+1;i<=end;i++)
 		inputArr[i]+=inputArr[i-1];
 
-	sumArr[2*myId] = inputArr[middle-1];
-	sumArr[2*myId + 1] = inputArr[end];
+	if(start == middle && middle == end) // one element per thread
+	{
+		sumArr[2*myId+1] = inputArr[start];
+		//cout << "Thread id is " << myId << "Start is " << start <<endl;
+	}
+	else
+	{
+		sumArr[2*myId] = inputArr[middle-1];
+		sumArr[2*myId + 1] = inputArr[end];
+	}
 
 
 	//barrier to synchronize local sums
@@ -201,9 +212,9 @@ void * parallel_prefix_sum(void * arg)
 
 	cout << "Input array is ";
 	for(int i=0;i<MAX_NUM;i++)
-		cout << inputArr[i] << " ";
-	cout << endl;
-	 */
+		cout << i << " ";
+	cout << endl;*/
+
 	// up sweep
 
 	upSweep(myId);
@@ -211,9 +222,9 @@ void * parallel_prefix_sum(void * arg)
 	/*cout << "After Up sweep Sum array is" <<endl;
 	for(int i=0;i<2*numThreads;i++)
 		cout << sumArr[i] << " ";
-	cout << endl;
+	cout << endl;*/
 	// down sweep
-	 */
+
 
 	downSweep(myId);
 
@@ -221,6 +232,7 @@ void * parallel_prefix_sum(void * arg)
 	for(int i=0;i<2*numThreads;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;*/
+
 	//compute complete prefix sum
 	for(int i=start;i<middle;i++)
 		inputArr[i]+= sumArr[2*myId];
@@ -277,10 +289,10 @@ void upSweep(int myId)
 	int numThreads = MAX_THREADS;
 	int numElements = 2*numThreads;
 	int numSteps = log2(numElements);
-	int  i = 2*myId;
+	//int  i = 2*myId;
 	int pow2 = 1,pow1;
 	int index,dec_i;
-	for(int d = 0; d < numSteps;d++)
+	/*for(int d = 0; d < numSteps;d++)
 	{
 		//int pow1 = pow(2,d+1);
 		//int pow2 = pow(2,d);
@@ -303,7 +315,31 @@ void upSweep(int myId)
 
 		i-=pow1;
 		pow2=pow1;
+	}*/
+	for(int d = 0; d < numSteps;d++)
+	{
+		//int pow1 = pow(2,d+1);
+		//int pow2 = pow(2,d);
+		pow1 = 2*pow2;
+		if( d == numSteps-1)
+			sumArr[numElements-1]=0;
+		else
+		{
+			for(int i=0 ; i < 2*numThreads ; i+= pow1)
+			{
+				if( i== 2*myId)
+				{
+					dec_i = i-1;
+					index = dec_i+pow1;
+					sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
+				}
+			}
+		}
+		mylib_logbarrier(barr, numThreads, myId);
+		pow2=pow1;
 	}
+
+
 
 }
 
@@ -317,17 +353,28 @@ int main()
 		inputArr[i] = i+1;
 		checkArr[i] = inputArr[i];
 	}
-	clock_t start = clock();
+
+
+	struct timeval tz;
+	struct timezone tx;
+	double start_time, end_time;
+
+
+	gettimeofday(&tz, &tx);
+	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	parallel_prefix_sum_main();
-	clock_t end = clock();
-	double ptime =(double)end - (double)start;
+	gettimeofday(&tz, &tx);
+	end_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
+
+	double ptime =(double)end_time - (double)start_time;
+
 	cout << "Parallel Time is " << ptime;
 
-	start = clock();
+	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	for(int i=0;i<MAX_NUM;i++)
 		checkArr[i+1] += checkArr[i];
-	end = clock();
-	double stime = ((double)end - (double)start);
+	end_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
+	double stime = ((double)end_time - (double)start_time);
 	cout << "Serial Time is " << stime;
 
 	cout << "Speedup is "<< stime/ptime <<endl;
