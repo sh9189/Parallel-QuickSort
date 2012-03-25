@@ -10,7 +10,7 @@
 #include <time.h>
 #include <sys/time.h>
 using namespace std;
-#define MAX_NUM 100000000
+#define MAX_NUM 64
 #define MAX_THREADS 4
 
 typedef struct barrier_node {
@@ -98,7 +98,7 @@ void printArray(int arr[],int numElements);
 mylob_logbarrier_t barr;
 int inputArr[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
 int checkArr[MAX_NUM];
-int sumArr[MAX_THREADS*2];
+int sumArr[MAX_THREADS];
 
 void parallel_prefix_sum_main()
 {
@@ -113,8 +113,7 @@ void parallel_prefix_sum_main()
 	pthread_t *p_threads= new pthread_t[numThreads];
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
-	//for(int i=0;i<2*numThreads;i++)
-	//sumArr[i]=0;
+
 	struct thread_info_type *threadInfoArr = new struct thread_info_type[numThreads];
 	int lastIndex = 0;
 
@@ -154,59 +153,26 @@ void * parallel_prefix_sum(void * arg)
 {
 	struct thread_info_type threadInfo = *((struct thread_info_type *)arg);
 
-
-
 	int start = threadInfo.start; // start element Index
 	int end = threadInfo.end; // end element Index
 	int myId = threadInfo.threadId;
 	int numThreads = MAX_THREADS;
 	int numElements = end-start+1;
-	int middle = start + numElements/2; // middle element Index
 
-	//cout << "Start is " << start << " End is " << end << " middle is "<<middle<<" id is" << myId<<endl;
-
-	/*cout << "First Half" << endl;
-	for(int i=start;i< middle;i++)
-		cout<< myId << " " << inputArr[i] << endl;
-
-	cout << "Second Half" << endl;
-	for(int i=middle;i<= end;i++)
-		cout<< myId << " " << inputArr[i] << endl;*/
-
-
-	// compute local sum and put it in sum array
-	/*int firstHalfSum = 0 , secondHalfSum = 0;
-	for(int i=start;i<middle;i++) // compute first half sum
-		firstHalfSum += inputArr[i];
-
-	for(int i=middle; i<= end;i++) // compute second half sum
-		secondHalfSum += inputArr[i];*/
+	//cout << "Start is " << start << " End is " << end <<" id is" << myId<<endl;
 
 	// compute local prefix sums
 
-	for(int i=start+1;i<middle;i++)
+	for(int i=start+1;i<=end;i++)
 		inputArr[i]+=inputArr[i-1];
 
-	for(int i=middle+1;i<=end;i++)
-		inputArr[i]+=inputArr[i-1];
-
-	if(start == middle && middle == end) // one element per thread
-	{
-		sumArr[2*myId+1] = inputArr[start];
-		//cout << "Thread id is " << myId << "Start is " << start <<endl;
-	}
-	else
-	{
-		sumArr[2*myId] = inputArr[middle-1];
-		sumArr[2*myId + 1] = inputArr[end];
-	}
-
+	sumArr[myId] = inputArr[end];
 
 	//barrier to synchronize local sums
 	mylib_logbarrier(barr, numThreads, myId);
 
 	/*cout << "Sum array is ";
-	for(int i=0;i<2*numThreads;i++)
+	for(int i=0;i<numThreads;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;
 
@@ -216,33 +182,62 @@ void * parallel_prefix_sum(void * arg)
 	cout << endl;*/
 
 	// up sweep
+	int numSteps = log2(numElements);
+	int pow2 = 1,pow1;
+	int index,dec_i;
 
-	upSweep(myId);
+	for(int d = 0; d < numSteps;d++)
+	{
+		pow1 = 2*pow2;
+		if( d == numSteps-1)
+			sumArr[numElements-1]=0;
+		else
+		{
+			if(myId% pow1 ==0)
+			{
 
-	/*cout << "After Up sweep Sum array is" <<endl;
-	for(int i=0;i<2*numThreads;i++)
+				dec_i = myId-1;
+				index = dec_i+pow1;
+				sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
+			}
+		}
+		mylib_logbarrier(barr, numThreads, myId);
+		pow2=pow1;
+	}
+
+	/*cout << "Id is " << myId << " After Up sweep Sum array is" <<endl;
+	for(int i=0;i<numThreads;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;*/
 	// down sweep
 
+	int index1,index2,temp;
+	pow1 = pow(2, numSteps);
+	for(int d = numSteps-1 ; d >= 0;d--)
+	{
+		pow2 = pow1/2;
+		if(myId% pow1 ==0)
+		{
+			dec_i = myId-1;
+			index2 = pow2+dec_i;
+			index1 = pow1+dec_i;
+			temp = sumArr[index2];
+			sumArr[index2] = sumArr[index1];
+			sumArr[index1] += temp;
+		}
+		mylib_logbarrier(barr, numThreads, myId);
+		pow1 = pow2;
+	}
 
-	downSweep(myId);
-
-	/*cout << "After Down sweep Sum array is" <<endl;
-	for(int i=0;i<2*numThreads;i++)
+	/*cout <<  "Id is " << myId << "After Down sweep Sum array is" <<endl;
+	for(int i=0;i<numThreads;i++)
 		cout << sumArr[i] << " ";
 	cout << endl;*/
 
 	//compute complete prefix sum
-	for(int i=start;i<middle;i++)
-		inputArr[i]+= sumArr[2*myId];
-	for(int i=middle;i<=end;i++)
-		inputArr[i]+= sumArr[2*myId+1];
+	for(int i=start;i<=end;i++)
+		inputArr[i]+= sumArr[myId];
 
-	/*cout << "Input array is ";
-	for(int i=0;i<MAX_NUM;i++)
-		cout << inputArr[i] << " ";
-	cout << endl;*/
 
 }
 
