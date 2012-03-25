@@ -96,14 +96,17 @@ void upSweep(int myId);
 void downSweep(int myId);
 void printArray(int arr[],int numElements);
 
-mylob_logbarrier_t barr;
+pthread_barrier_t barr;
 int inputArr[MAX_NUM]; // = {3,1,7,0,4,1,6,3};
 int checkArr[MAX_NUM];
 int sumArr[MAX_THREADS];
 
 void parallel_prefix_sum_main()
 {
-	mylib_init_barrier (barr);
+	if(pthread_barrier_init(&barr, NULL, MAX_THREADS))
+	{
+		cout << "Could not create a barrier\n";
+	}
 
 	int numElements = MAX_NUM;
 	int numThreads = MAX_THREADS;
@@ -170,7 +173,7 @@ void * parallel_prefix_sum(void * arg)
 	sumArr[myId] = inputArr[end];
 
 	//barrier to synchronize local sums
-	mylib_logbarrier(barr, numThreads, myId);
+	pthread_barrier_wait(&barr);
 
 	/*cout << "Sum array is ";
 	for(int i=0;i<numThreads;i++)
@@ -202,7 +205,7 @@ void * parallel_prefix_sum(void * arg)
 				sumArr[index] = sumArr[dec_i+pow2]+sumArr[index];
 			}
 		}
-		mylib_logbarrier(barr, numThreads, myId);
+		pthread_barrier_wait(&barr);
 		pow2=pow1;
 	}
 
@@ -226,7 +229,7 @@ void * parallel_prefix_sum(void * arg)
 			sumArr[index2] = sumArr[index1];
 			sumArr[index1] += temp;
 		}
-		mylib_logbarrier(barr, numThreads, myId);
+		pthread_barrier_wait(&barr);
 		pow1 = pow2;
 	}
 
@@ -268,7 +271,7 @@ void downSweep(int myId)
 				sumArr[index1] += temp;
 			}
 		}
-		mylib_logbarrier(barr, numThreads, myId);
+		//mylib_logbarrier(barr, numThreads, myId);
 		pow1 = pow2;
 	}
 
@@ -325,7 +328,7 @@ void upSweep(int myId)
 				}
 			}
 		}
-		mylib_logbarrier(barr, numThreads, myId);
+		//mylib_logbarrier(barr, numThreads, myId);
 		pow2=pow1;
 	}
 
