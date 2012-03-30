@@ -285,7 +285,7 @@ void * parallel_quick_sort(void * arg)
 		int targetGreaterStartIndex = lsumArr[leaderId+threadsInPartition-1]+1+rsumArr[myId]-numGreaterElements;
 		memcpy(currentMirrorArr+targetLessStartIndex,currentArr+lessStartIndex,numLessElements*sizeof(int));
 		if(myId==leaderId)
-			memcpy(currentMirrorArr+);
+			memcpy(currentMirrorArr+targetGreaterStartIndex-1,currentArr+greaterStartIndex-1,sizeof(int));
 		memcpy(currentMirrorArr+targetGreaterStartIndex,currentArr+greaterStartIndex,numGreaterElements*sizeof(int));
 
 		// wait for everyone to copy
