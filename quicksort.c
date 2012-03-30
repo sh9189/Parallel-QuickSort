@@ -21,8 +21,8 @@
 #include <assert.h>
 #include <string.h>
 
-#define MAX_NUM 100000000
-#define MAX_THREADS 4
+#define MAX_NUM 1000000
+#define MAX_THREADS 8
 
 struct thread_info_type
 {
@@ -61,14 +61,48 @@ void swap(int *x,int *y);
 void validate(int* output, int num_elements);
 
 
+
+int kth_smallest(int a[], int n, int k)
+{
+	int i,j,l,m ;
+	int x ;
+	l=0 ; m=n-1 ;
+	while (l<m) {
+		x=a[k] ;
+		i=l ;
+		j=m ;
+		do {
+			while (a[i]<x) i++ ;
+			while (x<a[j]) j-- ;
+			if (i<=j) {
+				swap(&a[i],&a[j]) ;
+				i++ ; j-- ;
+			}
+		} while (i<=j) ;
+		if (j<k) l=i ;
+		if (k<i) m=j ;
+	}
+	return k;
+}
+
+int median(int a[], int n)
+{
+	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
+}
+
+
+
 int *pqsort(int* inputArr, int numElements, int numThreads)
 {
 	//int sumArrSize = pow(2,ceil(log2(numThreads)));
 	int *lsumArr = (int *)malloc(sizeof(int)*numThreads);
+	assert (lsumArr!=NULL);
 	int *rsumArr = (int *)malloc(sizeof(int)*numThreads);
+	assert (rsumArr!=NULL);
 	pthread_barrier_t commonBarr[MAX_THREADS];
 	pthread_barrier_t ownBarr[MAX_THREADS];
 	int *mirrorArr = (int *)malloc(sizeof(int)*numElements);
+	assert (mirrorArr!=NULL);
 	for(int i=0;i<MAX_THREADS;i++)
 	{
 		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
@@ -84,11 +118,22 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	//printArray(a,numElements);
 
 	pthread_t *p_threads= (pthread_t *)malloc(sizeof(pthread_t)*numThreads);
+	assert (p_threads!=NULL);
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
 
 	struct thread_info_type *threadInfoArr = (struct thread_info_type *)malloc(sizeof(struct thread_info_type)*numThreads);
+	assert (threadInfoArr!=NULL);
 	int lastIndex = 0;
+
+	//find median and swap with zeroth element
+	//int * medianArr = (int *)malloc(sizeof(int)*numElements);
+	//assert(medianArr!=NULL);
+	//memcpy(medianArr,inputArr,sizeof(int)*numElements);
+	//bring median to position zero
+	int pivotIndex = median(inputArr,numElements);
+	swap(&inputArr[0],&inputArr[pivotIndex]);
+
 
 	// assign ranges and create threads
 	for(int i=0;i<numThreads;i++)
@@ -115,7 +160,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 		lastIndex++; // increment lastIndex so that it is ready for next iteration
 	}
 	struct thread_local_type * threadLocalArr = (struct thread_local_type *)malloc(sizeof(struct thread_local_type)*numThreads);
-
+	assert (threadLocalArr!=NULL);
 	for(int i=0;i<numThreads;i++)
 	{
 		threadLocalArr[i].myId = i;
@@ -320,7 +365,9 @@ void * parallel_quick_sort(void * arg)
 		//partition for next iteration
 		if(myId == leaderId)
 		{
-
+			int pivotIndex = median(currentArr+start,totalLessElements);
+			assert(pivotIndex < (start+totalLessElements-1));
+			swap(&currentArr[start],&currentArr[pivotIndex]);
 
 			int elementsPerThread = totalLessElements/lessThreads;
 			int excessElements = totalLessElements%lessThreads;
@@ -360,9 +407,16 @@ void * parallel_quick_sort(void * arg)
 			//skip pivot
 			lastIndex++;
 
+
+
 			elementsPerThread = totalGreaterElements/greaterThreads;
 			excessElements = totalGreaterElements%greaterThreads;
 			int greaterPivotPosition = lastIndex;
+
+			pivotIndex = median(currentArr+greaterPivotPosition,totalGreaterElements);
+			assert(pivotIndex < (greaterPivotPosition+totalGreaterElements-1));
+			swap(&currentArr[greaterPivotPosition],&currentArr[pivotIndex]);
+
 			for(int i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
 			{
 				threadInfoArr[i].start = lastIndex;
@@ -416,8 +470,13 @@ void validate(int* output, int num_elements) {
 
 int main()
 {
-	int inputArr[MAX_NUM];
-	int checkArr[MAX_NUM];
+	//int inputArr[MAX_NUM];
+	//int checkArr[MAX_NUM];
+	int *inputArr = (int *)malloc(sizeof(int)*MAX_NUM);
+	assert(inputArr!=NULL);
+	int *checkArr = (int *)malloc(sizeof(int)*MAX_NUM);
+	assert(checkArr!=NULL);
+
 
 	srand(time(NULL));
 	//srand(9999);
