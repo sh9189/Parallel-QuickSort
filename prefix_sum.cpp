@@ -11,8 +11,8 @@
 #include <sys/time.h>
 using namespace std;
 
-#define MAX_NUM 1024
-#define MAX_THREADS 5
+#define MAX_NUM 10000000
+#define MAX_THREADS 4
 
 struct thread_info_type
 {
