@@ -544,9 +544,13 @@ void * parallel_quick_sort(void * arg)
 
 		int greaterThreads = threadsInPartition - lessThreads;
 
+
+
+
 		//partition for next iteration
 		if(myId == leaderId)
 		{
+			printf("Less Threads %d Greater Threads %d\n",lessThreads,greaterThreads);
 			//int pivotIndex = median(currentArr+start,totalLessElements);
 			//pivotIndex+=start;
 			//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
@@ -718,7 +722,7 @@ int main()
 			printf("Error i is %d parallel result is %d serial result is %d\n",i,inputArr[i],checkArr[i]);
 	}
 
-
+	/*
 	gettimeofday(&tz, &tx);
 	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	qsort(checkArr2,MAX_NUM,sizeof(int),compare);
@@ -728,7 +732,7 @@ int main()
 	double stime2 = ((double)end_time - (double)start_time);
 	printf("Serial Time is %lf\n",stime2);
 	printf("Speedup is %lf\n",stime2/ptime);
-
+	*/
 
 }
 
