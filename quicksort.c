@@ -334,6 +334,8 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	free(threadInfoArr);
 	free(threadLocalArr);
 	free(mirrorArr);
+	free(pivotElementArr);
+	free(pivotIndexArr);
 	//cout << "Prefix Sum array is " << endl;
 	//printArray(a,numElements);
 }
@@ -670,7 +672,7 @@ int main()
 	//srand(9999);
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % 1000000;
+		inputArr[i] = rand() % MAX_NUM;
 		//inputArr[i] = i+1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
