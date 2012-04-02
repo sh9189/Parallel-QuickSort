@@ -22,7 +22,7 @@
 #include <string.h>
 
 //#define DEBUG
-#define MAX_NUM 16
+#define MAX_NUM 64
 #define MAX_THREADS 4
 
 struct thread_info_type
@@ -85,39 +85,14 @@ int kth_smallest(int a[], int n, int k)
 	return a[k];
 }
 
-int kth_smallest_with_pos(int a[], int n, int k,int pos[])
-{
-	int i,j,l,m ;
-	int x ;
-	l=0 ; m=n-1 ;
-	while (l<m) {
-		x=a[k] ;
-		i=l ;
-		j=m ;
-		do {
-			while (a[i]<x) i++ ;
-			while (x<a[j]) j-- ;
-			if (i<=j) {
-				swap(&a[i],&a[j]) ;
-				swap(&pos[i],&pos[j]);
-				i++ ; j-- ;
-			}
-		} while (i<=j) ;
-		if (j<k) l=i ;
-		if (k<i) m=j ;
-	}
-	return k;
-}
-
 
 int new_median(int a[], int n)
 {
 	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
 }
 
-
-
 pthread_barrier_t globalBarr;
+
 
 
 int *pqsort(int* inputArr, int numElements, int numThreads)
@@ -127,21 +102,10 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	assert (lsumArr!=NULL);
 	int *rsumArr = (int *)malloc(sizeof(int)*numThreads);
 	assert (rsumArr!=NULL);
-	pthread_barrier_t commonBarr[numThreads];
-	//pthread_barrier_t ownBarr[MAX_THREADS];
-
-
+	pthread_barrier_t commonBarr[MAX_THREADS];
 	int *mirrorArr = (int *)malloc(sizeof(int)*numElements);
 	assert (mirrorArr!=NULL);
 
-	int i;
-	/*for(i=0;i<MAX_THREADS;i++)
-	{
-		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
-		{
-			printf("Could not create barrier %d\n",i);
-		}
-	}*/
 	if(pthread_barrier_init(&commonBarr[0], NULL, numThreads))
 	{
 		printf("Could not create barrier %d\n",0);
@@ -150,7 +114,6 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	{
 		printf("Could not create barrier %d\n",0);
 	}
-
 	//cout << "Input array is " << endl;
 	//printArray(a,numElements);
 
@@ -175,7 +138,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 
 
 
-
+	int i;
 	// assign ranges and create threads
 	for(i=0;i<numThreads;i++)
 	{
@@ -235,7 +198,6 @@ void printArray(int arr[],int start,int end)
 void * parallel_quick_sort(void * arg)
 {
 
-	int i;
 	struct thread_local_type threadLocal = *((struct thread_local_type *)arg);
 	struct thread_info_type * threadInfoArr = threadLocal.threadInfoArr;
 	int *inputArr = threadInfoArr[threadLocal.myId].inputArr;
@@ -251,9 +213,11 @@ void * parallel_quick_sort(void * arg)
 	int *currentMirrorArr;
 
 	int ping=1;
-	int totalIterations = 0;
+	int done=0;
 	int numIterations = 0;
-	int done = 0;
+	int totalIterations = 0;
+	int i;
+
 	while(1)
 	{
 		struct thread_info_type threadInfo = threadInfoArr[threadLocal.myId];
@@ -265,9 +229,7 @@ void * parallel_quick_sort(void * arg)
 		int totalElementsInPartition = threadInfo.totalElementsInPartition;
 		int threadsInPartition = threadInfo.threadsInPartition;
 		if(totalIterations == 0)
-		{
 			totalIterations = log2(threadsInPartition)+1;
-		}
 
 
 		//printf("Start is %d End is %d MyId is %d\n",start,end,myId);
@@ -288,27 +250,20 @@ void * parallel_quick_sort(void * arg)
 		{
 			if(currentArr != inputArr)
 			{
-		//		printf("Id is %d Copying to output\n",myId);
+				//		printf("Id is %d Copying to output\n",myId);
 				memcpy(inputArr+start,mirrorArr+start,sizeof(int)*(numElements));
 			}
 			qsort(inputArr+start,numElements,sizeof(int),compare);
-			done = 1;
+			done=1;
 		}
 		if(!done)
 		{
+
 			//find pivot across threads
 			//printf("Id is %d Sending array ",myId);
 			//printArray(currentArr,start,end);
 
-<<<<<<< HEAD
-			int localMedian = median(currentArr+start,numElements);
-=======
-		//find pivot across threads
-		//printf("Id is %d Sending array ",myId);
-		//printArray(currentArr,start,end);
-
-		int localMedian = new_median(currentArr+start,numElements);
->>>>>>> eda00f4cd7f6846b6d13d4c3abab7d4e89baa5a9
+			int localMedian = new_median(currentArr+start,numElements);
 
 #ifdef DEBUG
 			printf("Id is %d localMedian is %d\n",myId,localMedian);
@@ -328,9 +283,8 @@ void * parallel_quick_sort(void * arg)
 			//printf("Id is %d localPivotArr is",myId);
 			//printArray(localPivotArr,0,threadsInPartition-1);
 
-		int pivotElement = new_median(localPivotArr,threadsInPartition);
-		free(localPivotArr);
-
+			int pivotElement = new_median(localPivotArr,threadsInPartition);
+			free(localPivotArr);
 #ifdef DEBUG
 			printf("Id is %d pivotElement is %d \n",myId,pivotElement);
 #endif
@@ -374,17 +328,10 @@ void * parallel_quick_sort(void * arg)
 
 			}
 #endif
-<<<<<<< HEAD
 			//prefix sum for less than and greater than
 			if(myId == leaderId)
-=======
-		//prefix sum for less than and greater than
-		if(myId == leaderId)
-		{
-			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
->>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 			{
-				for(int i=leaderId+1;i < (leaderId+threadsInPartition);i++)
+				for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
 				{
 					lsumArr[i]+=lsumArr[i-1];
 					rsumArr[i]+=rsumArr[i-1];
@@ -419,24 +366,8 @@ void * parallel_quick_sort(void * arg)
 			if(lessThreads == threadsInPartition)
 				lessThreads--;
 
-
-		int greaterThreads = threadsInPartition - lessThreads;
-		if(greaterThreads == threadsInPartition)
-		{
-			lessThreads++;
-			greaterThreads--;
-		}
-		//partition for next iteration
-		if(myId == leaderId)
-		{
-			//printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
-			//int pivotIndex = median(currentArr+start,totalLessElements);
-			//pivotIndex+=start;
-			//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
-			//assert(pivotIndex < (start+totalLessElements));
-			//swap(&currentArr[start],&currentArr[pivotIndex]);
-			int lastIndex = start,elementsPerThread,excessElements;
-			if(lessThreads!=0)
+			int greaterThreads = threadsInPartition - lessThreads;
+			if(greaterThreads == threadsInPartition)
 			{
 				lessThreads++;
 				greaterThreads--;
@@ -444,7 +375,7 @@ void * parallel_quick_sort(void * arg)
 			//partition for next iteration
 			if(myId == leaderId)
 			{
-				printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
+				//printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
 				//int pivotIndex = median(currentArr+start,totalLessElements);
 				//pivotIndex+=start;
 				//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
@@ -457,15 +388,7 @@ void * parallel_quick_sort(void * arg)
 					elementsPerThread = totalLessElements/lessThreads;
 					excessElements = totalLessElements%lessThreads;
 
-<<<<<<< HEAD
-					for(int i=leaderId;i<(leaderId+lessThreads);i++)
-=======
-				for(i=leaderId;i<(leaderId+lessThreads);i++)
-				{
-					threadInfoArr[i].start = lastIndex;
-					lastIndex+= (elementsPerThread -1);
-					if(excessElements > 0)
->>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
+					for(i=leaderId;i<(leaderId+lessThreads);i++)
 					{
 						threadInfoArr[i].start = lastIndex;
 						lastIndex+= (elementsPerThread -1);
@@ -496,15 +419,7 @@ void * parallel_quick_sort(void * arg)
 					//swap(&currentArr[greaterPivotPosition],&currentArr[pivotIndex]);
 					//printf("Id is %d Pivot for right partition is %d\n",myId,pivotIndex);
 
-<<<<<<< HEAD
-					for(int i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
-=======
-				for(i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
-				{
-					threadInfoArr[i].start = lastIndex;
-					lastIndex+= (elementsPerThread -1);
-					if(excessElements > 0)
->>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
+					for(i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
 					{
 						threadInfoArr[i].start = lastIndex;
 						lastIndex+= (elementsPerThread -1);
@@ -524,15 +439,9 @@ void * parallel_quick_sort(void * arg)
 					//change barrier for right partition leader
 					pthread_barrier_init(&commonBarr[leaderId+lessThreads], NULL, greaterThreads);
 				}
+
 			}
-<<<<<<< HEAD
-=======
-			//wake up other threads
-			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
-				pthread_barrier_wait(&ownBarr[i]);
->>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 		}
-		//printf("Id is %d Waiting for global barrier\n",myId);
 		pthread_barrier_wait(&globalBarr);
 		numIterations++;
 		if(numIterations == totalIterations)
@@ -559,7 +468,7 @@ void validate(int* output, int num_elements) {
 			return;
 		}
 	}
-//	printf("============= SORTED ===========\n");
+	//	printf("============= SORTED ===========\n");
 }
 
 int main()
@@ -579,8 +488,8 @@ int main()
 	int i;
 	for(i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % (MAX_NUM/10);
-//		inputArr[i] = 1;
+		inputArr[i] = rand() % MAX_NUM;
+		//inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
@@ -599,14 +508,16 @@ int main()
 	end_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 
 	validate(inputArr, MAX_NUM);
-	//printf("Output Arr is\n");
-	//printArray(inputArr,0,MAX_NUM-1);
+#ifdef DEBUG
+	printf("Output Arr is\n");
+	printArray(inputArr,0,MAX_NUM-1);
+#endif
 
 
 
 	double ptime =(double)end_time - (double)start_time;
 
-//	printf("Parallel Time is %lf\n",ptime);
+	//	printf("Parallel Time is %lf\n",ptime);
 
 	gettimeofday(&tz, &tx);
 	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
@@ -614,9 +525,14 @@ int main()
 	gettimeofday(&tz, &tx);
 	end_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
 	validate(checkArr, MAX_NUM);
+#ifdef DEBUG
+	printf("Output Arr is\n");
+	printArray(checkArr,0,MAX_NUM-1);
+#endif
+
 
 	double stime = ((double)end_time - (double)start_time);
-//	printf("Serial Time is %lf\n",stime);
+	//	printf("Serial Time is %lf\n",stime);
 	printf("Speedup is %lf\n",stime/ptime);
 
 	for(i=0;i<MAX_NUM;i++)
@@ -638,7 +554,6 @@ int main()
 	 */
 
 }
-
 
 
 
