@@ -22,25 +22,17 @@
 #include <string.h>
 
 //#define DEBUG
-#define MAX_NUM 10000000
-#define MAX_THREADS 8
+#define MAX_NUM 64
+#define MAX_THREADS 4
 
 struct thread_info_type
 {
-	int *inputArr;
-	int *lsumArr;
-	int *rsumArr;
-	int *mirrorArr;
 	int start; // starting index of array
 	int end; // ending index of array
-	int threadId;
 	int leaderId;
-	int pivotIndex;
 	int threadsInPartition;
 	int totalElementsInPartition;
-	pthread_barrier_t *commonBarr;
-	pthread_barrier_t *ownBarr;
-	int *pivotElementArr;
+	int *inputArr;
 
 };
 
@@ -56,132 +48,18 @@ int compare (const void * a, const void * b)
 	return ( *(int*)a - *(int*)b );
 }
 
+int *lsumArr;
+int *rsumArr;
+int *mirrorArr;
+pthread_barrier_t *commonBarr;
+pthread_barrier_t *ownBarr;
+int *pivotElementArr;
 
 
 void * parallel_quick_sort(void *);
 void printArray(int arr[],int start,int end);
 void swap(int *x,int *y);
 void validate(int* output, int num_elements);
-
-int median(int arr[], int n)
-{
-	int low, high ;
-	int median;
-	int middle, ll, hh;
-
-	low = 0 ; high = n-1 ; median = (low + high) / 2;
-	for (;;) {
-		if (high <= low) /* One element only */
-			return arr[median] ;
-
-		if (high == low + 1) {  /* Two elements only */
-			if (arr[low] > arr[high])
-				swap(&arr[low], &arr[high]) ;
-			return arr[median] ;
-		}
-
-		/* Find median of low, middle and high items; swap into position low */
-		middle = (low + high) / 2;
-		if (arr[middle] > arr[high])    swap(&arr[middle], &arr[high]) ;
-		if (arr[low] > arr[high])       swap(&arr[low], &arr[high]) ;
-		if (arr[middle] > arr[low])     swap(&arr[middle], &arr[low]) ;
-
-		/* Swap low item (now in position middle) into position (low+1) */
-		swap(&arr[middle], &arr[low+1]) ;
-
-		/* Nibble from each end towards middle, swapping items when stuck */
-		ll = low + 1;
-		hh = high;
-		for (;;) {
-			do ll++; while (arr[low] > arr[ll]) ;
-			do hh--; while (arr[hh]  > arr[low]) ;
-
-			if (hh < ll)
-				break;
-
-			swap(&arr[ll], &arr[hh]) ;
-		}
-
-		/* Swap middle item (in position low) back into correct position */
-		swap(&arr[low], &arr[hh]) ;
-
-		/* Re-set active partition */
-		if (hh <= median)
-			low = ll;
-		if (hh >= median)
-			high = hh - 1;
-	}
-}
-
-int median_with_pos(int arr[], int n,int pos[])
-{
-	int low, high ;
-	int median;
-	int middle, ll, hh;
-
-	low = 0 ; high = n-1 ; median = (low + high) / 2;
-	for (;;) {
-		if (high <= low) /* One element only */
-			return median ;
-
-		if (high == low + 1) {  /* Two elements only */
-			if (arr[low] > arr[high])
-			{
-				swap(&arr[low], &arr[high]) ;
-				swap(&pos[low], &pos[high]) ;
-			}
-			return median ;
-		}
-
-		/* Find median of low, middle and high items; swap into position low */
-		middle = (low + high) / 2;
-		if (arr[middle] > arr[high])
-		{	swap(&arr[middle], &arr[high]) ;
-		swap(&pos[middle], &pos[high]) ;
-		}
-		if (arr[low] > arr[high])
-		{
-			swap(&arr[low], &arr[high]) ;
-			swap(&pos[low], &pos[high]) ;
-		}
-		if (arr[middle] > arr[low])
-		{
-			swap(&arr[middle], &arr[low]) ;
-			swap(&pos[middle], &pos[low]) ;
-		}
-
-		/* Swap low item (now in position middle) into position (low+1) */
-		swap(&arr[middle], &arr[low+1]) ;
-		swap(&pos[middle], &pos[low+1]) ;
-
-		/* Nibble from each end towards middle, swapping items when stuck */
-		ll = low + 1;
-		hh = high;
-		for (;;) {
-			do ll++; while (arr[low] > arr[ll]) ;
-			do hh--; while (arr[hh]  > arr[low]) ;
-
-			if (hh < ll)
-				break;
-
-			swap(&arr[ll], &arr[hh]) ;
-			swap(&pos[ll], &pos[hh]);
-		}
-
-		/* Swap middle item (in position low) back into correct position */
-		swap(&arr[low], &arr[hh]) ;
-		swap(&pos[low], &pos[hh]) ;
-
-		/* Re-set active partition */
-		if (hh <= median)
-			low = ll;
-		if (hh >= median)
-			high = hh - 1;
-	}
-}
-
-
-
 
 int kth_smallest(int a[], int n, int k)
 {
@@ -206,58 +84,32 @@ int kth_smallest(int a[], int n, int k)
 	return a[k];
 }
 
-int kth_smallest_with_pos(int a[], int n, int k,int pos[])
-{
-	int i,j,l,m ;
-	int x ;
-	l=0 ; m=n-1 ;
-	while (l<m) {
-		x=a[k] ;
-		i=l ;
-		j=m ;
-		do {
-			while (a[i]<x) i++ ;
-			while (x<a[j]) j-- ;
-			if (i<=j) {
-				swap(&a[i],&a[j]) ;
-				swap(&pos[i],&pos[j]);
-				i++ ; j-- ;
-			}
-		} while (i<=j) ;
-		if (j<k) l=i ;
-		if (k<i) m=j ;
-	}
-	return k;
-}
 
 
 int new_median(int a[], int n)
 {
 	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
 }
-/*
-
-int median_with_pos(int a[], int n,int pos[])
-{
-	return kth_smallest_with_pos(a,n,(((n)&1)?((n)/2):(((n)/2)-1)),pos);
-}*/
-
-
 
 
 int *pqsort(int* inputArr, int numElements, int numThreads)
 {
-	//int sumArrSize = pow(2,ceil(log2(numThreads)));
-	int *lsumArr = (int *)malloc(sizeof(int)*numThreads);
+
+	lsumArr = (int *)malloc(sizeof(int)*numThreads);
 	assert (lsumArr!=NULL);
-	int *rsumArr = (int *)malloc(sizeof(int)*numThreads);
+	rsumArr = (int *)malloc(sizeof(int)*numThreads);
 	assert (rsumArr!=NULL);
-	pthread_barrier_t commonBarr[MAX_THREADS];
-	pthread_barrier_t ownBarr[MAX_THREADS];
-	int *mirrorArr = (int *)malloc(sizeof(int)*numElements);
+	commonBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
+	assert (commonBarr!=NULL);
+	ownBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
+	assert (ownBarr!=NULL);
+	mirrorArr = (int *)malloc(sizeof(int)*numElements);
 	assert (mirrorArr!=NULL);
+	pivotElementArr = (int *)malloc(sizeof(int)*numThreads);
+	assert(pivotElementArr!=NULL);
+
 	int i;
-	for(i=0;i<MAX_THREADS;i++)
+	for(i=0;i<numThreads;i++)
 	{
 		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
 		{
@@ -285,30 +137,16 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	//swap(&inputArr[0],&inputArr[pivotIndex]);
 	//printf("Pivot position is %d\n",pivotIndex);
 
-	int *pivotElementArr = (int *)malloc(sizeof(int)*numThreads);
-	assert(pivotElementArr!=NULL);
-	int *pivotIndexArr = (int *)malloc(sizeof(int)*numThreads);
-	assert(pivotIndexArr!=NULL);
-
-
 
 
 	// assign ranges and create threads
 	for(i=0;i<numThreads;i++)
 	{
 		threadInfoArr[i].totalElementsInPartition = numElements;
-		threadInfoArr[i].threadId = i;
 		threadInfoArr[i].start = lastIndex;
 		threadInfoArr[i].leaderId = 0; // initially thread 0 is leader
-		threadInfoArr[i].inputArr = inputArr;
-		threadInfoArr[i].lsumArr = lsumArr;
-		threadInfoArr[i].rsumArr = rsumArr;
-		threadInfoArr[i].pivotIndex = 0; // pivot is at position 0
-		threadInfoArr[i].mirrorArr = mirrorArr;
-		threadInfoArr[i].commonBarr = commonBarr;
-		threadInfoArr[i].ownBarr = ownBarr;
 		threadInfoArr[i].threadsInPartition = numThreads;
-		threadInfoArr[i].pivotElementArr = pivotElementArr;
+		threadInfoArr[i].inputArr = inputArr;
 		lastIndex+= (elementsPerThread -1);
 		if(excessElements > 0)
 		{
@@ -356,16 +194,8 @@ void * parallel_quick_sort(void * arg)
 	int i;
 	struct thread_local_type threadLocal = *((struct thread_local_type *)arg);
 	struct thread_info_type * threadInfoArr = threadLocal.threadInfoArr;
-	int *inputArr = threadInfoArr[threadLocal.myId].inputArr;
-	int *lsumArr = threadInfoArr[threadLocal.myId].lsumArr;
-	int *rsumArr = threadInfoArr[threadLocal.myId].rsumArr;
-	int *mirrorArr = threadInfoArr[threadLocal.myId].mirrorArr;
-	int *pivotElementArr = threadInfoArr[threadLocal.myId].pivotElementArr;
-
 	int myId = threadLocal.myId;
 
-	pthread_barrier_t *commonBarr = threadInfoArr[threadLocal.myId].commonBarr;
-	pthread_barrier_t *ownBarr = threadInfoArr[threadLocal.myId].ownBarr;
 	int *currentArr;
 	int *currentMirrorArr;
 
@@ -381,7 +211,7 @@ void * parallel_quick_sort(void * arg)
 		int numElements = end-start+1;
 		int totalElementsInPartition = threadInfo.totalElementsInPartition;
 		int threadsInPartition = threadInfo.threadsInPartition;
-
+		int *inputArr = threadInfo.inputArr;
 		//printf("Start is %d End is %d MyId is %d\n",start,end,myId);
 		//printf("leaderid is %d MyId is %d\n",leaderId,myId);
 
@@ -400,7 +230,7 @@ void * parallel_quick_sort(void * arg)
 		{
 			if(currentArr != inputArr)
 			{
-		//		printf("Id is %d Copying to output\n",myId);
+				//		printf("Id is %d Copying to output\n",myId);
 				memcpy(inputArr+start,mirrorArr+start,sizeof(int)*(numElements));
 			}
 			qsort(inputArr+start,numElements,sizeof(int),compare);
@@ -408,8 +238,6 @@ void * parallel_quick_sort(void * arg)
 		}
 
 		//find pivot across threads
-		//printf("Id is %d Sending array ",myId);
-		//printArray(currentArr,start,end);
 
 		int localMedian = new_median(currentArr+start,numElements);
 
@@ -581,7 +409,6 @@ void * parallel_quick_sort(void * arg)
 					threadInfoArr[i].threadsInPartition = greaterThreads;
 					threadInfoArr[i].totalElementsInPartition = totalGreaterElements;
 					threadInfoArr[i].leaderId = leaderId+lessThreads;
-					threadInfoArr[i].pivotIndex = greaterPivotPosition;
 
 				}
 				//change barrier for right partition leader
@@ -616,7 +443,7 @@ void validate(int* output, int num_elements) {
 			return;
 		}
 	}
-//	printf("============= SORTED ===========\n");
+	//	printf("============= SORTED ===========\n");
 }
 
 int main()
@@ -636,8 +463,8 @@ int main()
 	int i;
 	for(i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % (MAX_NUM/10);
-//		inputArr[i] = 1;
+		inputArr[i] = rand() % (MAX_NUM);
+		//		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
@@ -663,7 +490,7 @@ int main()
 
 	double ptime =(double)end_time - (double)start_time;
 
-//	printf("Parallel Time is %lf\n",ptime);
+	printf("Parallel Time is %lf\n",ptime);
 
 	gettimeofday(&tz, &tx);
 	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
@@ -673,7 +500,7 @@ int main()
 	validate(checkArr, MAX_NUM);
 
 	double stime = ((double)end_time - (double)start_time);
-//	printf("Serial Time is %lf\n",stime);
+	printf("Serial Time is %lf\n",stime);
 	printf("Speedup is %lf\n",stime/ptime);
 
 	for(i=0;i<MAX_NUM;i++)
