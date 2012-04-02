@@ -23,7 +23,7 @@
 
 //#define DEBUG
 #define MAX_NUM 10000000
-#define MAX_THREADS 8
+#define MAX_THREADS 4
 
 struct thread_info_type
 {
@@ -530,8 +530,8 @@ int main()
 	int i;
 	for(i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % (MAX_NUM/10);
-		//		inputArr[i] = 1;
+		inputArr[i] = rand() % 1000000;
+		//inputArr[i] = MAX_NUM - i;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
