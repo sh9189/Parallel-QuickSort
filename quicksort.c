@@ -133,7 +133,9 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 
 	int *mirrorArr = (int *)malloc(sizeof(int)*numElements);
 	assert (mirrorArr!=NULL);
-	/*for(int i=0;i<MAX_THREADS;i++)
+
+	int i;
+	/*for(i=0;i<MAX_THREADS;i++)
 	{
 		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
 		{
@@ -175,7 +177,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 
 
 	// assign ranges and create threads
-	for(int i=0;i<numThreads;i++)
+	for(i=0;i<numThreads;i++)
 	{
 		threadInfoArr[i].totalElementsInPartition = numElements;
 		threadInfoArr[i].threadId = i;
@@ -200,14 +202,14 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	}
 	struct thread_local_type * threadLocalArr = (struct thread_local_type *)malloc(sizeof(struct thread_local_type)*numThreads);
 	assert (threadLocalArr!=NULL);
-	for(int i=0;i<numThreads;i++)
+	for(i=0;i<numThreads;i++)
 	{
 		threadLocalArr[i].myId = i;
 		threadLocalArr[i].threadInfoArr = threadInfoArr;
 		pthread_create(&p_threads[i],NULL,parallel_quick_sort,&threadLocalArr[i]);
 	}
 
-	for (int i=0; i< numThreads; i++)
+	for (i=0; i< numThreads; i++)
 		pthread_join(p_threads[i], NULL);
 
 	free(lsumArr);
@@ -224,7 +226,8 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 
 void printArray(int arr[],int start,int end)
 {
-	for(int i=start;i<=end;i++)
+	int i;
+	for(i=start;i<=end;i++)
 		printf("%d ",arr[i]);
 	printf("\n");
 }
@@ -232,6 +235,7 @@ void printArray(int arr[],int start,int end)
 void * parallel_quick_sort(void * arg)
 {
 
+	int i;
 	struct thread_local_type threadLocal = *((struct thread_local_type *)arg);
 	struct thread_info_type * threadInfoArr = threadLocal.threadInfoArr;
 	int *inputArr = threadInfoArr[threadLocal.myId].inputArr;
@@ -370,8 +374,15 @@ void * parallel_quick_sort(void * arg)
 
 			}
 #endif
+<<<<<<< HEAD
 			//prefix sum for less than and greater than
 			if(myId == leaderId)
+=======
+		//prefix sum for less than and greater than
+		if(myId == leaderId)
+		{
+			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
+>>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 			{
 				for(int i=leaderId+1;i < (leaderId+threadsInPartition);i++)
 				{
@@ -446,7 +457,15 @@ void * parallel_quick_sort(void * arg)
 					elementsPerThread = totalLessElements/lessThreads;
 					excessElements = totalLessElements%lessThreads;
 
+<<<<<<< HEAD
 					for(int i=leaderId;i<(leaderId+lessThreads);i++)
+=======
+				for(i=leaderId;i<(leaderId+lessThreads);i++)
+				{
+					threadInfoArr[i].start = lastIndex;
+					lastIndex+= (elementsPerThread -1);
+					if(excessElements > 0)
+>>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 					{
 						threadInfoArr[i].start = lastIndex;
 						lastIndex+= (elementsPerThread -1);
@@ -477,7 +496,15 @@ void * parallel_quick_sort(void * arg)
 					//swap(&currentArr[greaterPivotPosition],&currentArr[pivotIndex]);
 					//printf("Id is %d Pivot for right partition is %d\n",myId,pivotIndex);
 
+<<<<<<< HEAD
 					for(int i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
+=======
+				for(i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
+				{
+					threadInfoArr[i].start = lastIndex;
+					lastIndex+= (elementsPerThread -1);
+					if(excessElements > 0)
+>>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 					{
 						threadInfoArr[i].start = lastIndex;
 						lastIndex+= (elementsPerThread -1);
@@ -498,6 +525,12 @@ void * parallel_quick_sort(void * arg)
 					pthread_barrier_init(&commonBarr[leaderId+lessThreads], NULL, greaterThreads);
 				}
 			}
+<<<<<<< HEAD
+=======
+			//wake up other threads
+			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
+				pthread_barrier_wait(&ownBarr[i]);
+>>>>>>> a1bd1052cd527d7f983fc464a14395453c80bdee
 		}
 		//printf("Id is %d Waiting for global barrier\n",myId);
 		pthread_barrier_wait(&globalBarr);
@@ -543,10 +576,11 @@ int main()
 
 	srand(time(NULL));
 	//srand(9999);
-	for(int i=0;i<MAX_NUM;i++)
+	int i;
+	for(i=0;i<MAX_NUM;i++)
 	{
-		//inputArr[i] = rand() % (MAX_NUM/10);
-		inputArr[i] = 1;
+		inputArr[i] = rand() % (MAX_NUM/10);
+//		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
@@ -585,7 +619,7 @@ int main()
 //	printf("Serial Time is %lf\n",stime);
 	printf("Speedup is %lf\n",stime/ptime);
 
-	for(int i=0;i<MAX_NUM;i++)
+	for(i=0;i<MAX_NUM;i++)
 	{
 		if(inputArr[i]!=checkArr[i])
 			printf("Error i is %d parallel result is %d serial result is %d\n",i,inputArr[i],checkArr[i]);
