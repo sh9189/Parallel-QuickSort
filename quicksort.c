@@ -89,58 +89,44 @@ int kth_smallest(int a[], int n, int k)
 
 
 
-int new_median(int a[], int n)
+/*int new_median(int a[], int n)
 {
 	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
-}
+}*/
 
 
 int *pqsort(int* inputArr, int numElements, int numThreads)
 {
 
 	lsumArr = (int *)malloc(sizeof(int)*numThreads);
-	assert (lsumArr!=NULL);
+	//assert (lsumArr!=NULL);
 	rsumArr = (int *)malloc(sizeof(int)*numThreads);
-	assert (rsumArr!=NULL);
+	//assert (rsumArr!=NULL);
 	commonBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
-	assert (commonBarr!=NULL);
+	//assert (commonBarr!=NULL);
 	ownBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
-	assert (ownBarr!=NULL);
+	//assert (ownBarr!=NULL);
 	mirrorArr = (int *)malloc(sizeof(int)*numElements);
-	assert (mirrorArr!=NULL);
+	//assert (mirrorArr!=NULL);
 	pivotElementArr = (int *)malloc(sizeof(int)*numThreads);
-	assert(pivotElementArr!=NULL);
+	//assert(pivotElementArr!=NULL);
 
 	int i;
 	for(i=0;i<numThreads;i++)
-	{
-		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
-		{
-			printf("Could not create barrier %d\n",i);
-		}
-	}
-	if(pthread_barrier_init(&commonBarr[0], NULL, MAX_THREADS))
-	{
-		printf("Could not create barrier %d\n",0);
-	}
+		pthread_barrier_init(&ownBarr[i], NULL, 2);
+	pthread_barrier_init(&commonBarr[0], NULL, MAX_THREADS);
+
 	//cout << "Input array is " << endl;
 	//printArray(a,numElements);
 
 	pthread_t *p_threads= (pthread_t *)malloc(sizeof(pthread_t)*numThreads);
-	assert (p_threads!=NULL);
+	//assert (p_threads!=NULL);
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
 
 	struct thread_info_type *threadInfoArr = (struct thread_info_type *)malloc(sizeof(struct thread_info_type)*numThreads);
-	assert (threadInfoArr!=NULL);
+	//assert (threadInfoArr!=NULL);
 	int lastIndex = 0;
-
-	//bring median to position zero
-	//int pivotIndex = median(inputArr,numElements);
-	//swap(&inputArr[0],&inputArr[pivotIndex]);
-	//printf("Pivot position is %d\n",pivotIndex);
-
-
 
 	// assign ranges and create threads
 	for(i=0;i<numThreads;i++)
@@ -160,7 +146,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 		lastIndex++; // increment lastIndex so that it is ready for next iteration
 	}
 	struct thread_local_type * threadLocalArr = (struct thread_local_type *)malloc(sizeof(struct thread_local_type)*numThreads);
-	assert (threadLocalArr!=NULL);
+	//assert (threadLocalArr!=NULL);
 	for(i=0;i<numThreads;i++)
 	{
 		threadLocalArr[i].myId = i;
@@ -201,7 +187,7 @@ void * parallel_quick_sort(void * arg)
 
 	int *currentArr;
 	int *currentMirrorArr;
-
+	int *inputArr = threadInfoArr[myId].inputArr;
 	int ping=1;
 
 	while(1)
@@ -214,7 +200,7 @@ void * parallel_quick_sort(void * arg)
 		int numElements = end-start+1;
 		int totalElementsInPartition = threadInfo.totalElementsInPartition;
 		int threadsInPartition = threadInfo.threadsInPartition;
-		int *inputArr = threadInfo.inputArr;
+
 		//printf("Start is %d End is %d MyId is %d\n",start,end,myId);
 		//printf("leaderid is %d MyId is %d\n",leaderId,myId);
 
@@ -241,13 +227,16 @@ void * parallel_quick_sort(void * arg)
 		}
 
 		//find pivot across threads
+		int localMedian;
+		if(numElements & 1)
+			localMedian = kth_smallest(currentArr+start,numElements,numElements/2);
+		else
+			localMedian = kth_smallest(currentArr+start,numElements,numElements/2-1);
 
-		int localMedian = new_median(currentArr+start,numElements);
 
 #ifdef DEBUG
 		printf("Id is %d localMedian is %d\n",myId,localMedian);
 #endif
-		//printArray(currentArr,start,end);
 		pivotElementArr[myId] = localMedian;
 		//wait for everyone
 		pthread_barrier_wait(&commonBarr[leaderId]);
@@ -261,8 +250,12 @@ void * parallel_quick_sort(void * arg)
 		memcpy(localPivotArr,pivotElementArr+leaderId,threadsInPartition*sizeof(int));
 		//printf("Id is %d localPivotArr is",myId);
 		//printArray(localPivotArr,0,threadsInPartition-1);
+		int pivotElement;
+		if(threadsInPartition & 1)
+			pivotElement = kth_smallest(localPivotArr,threadsInPartition,threadsInPartition/2);
+		else
+			pivotElement = kth_smallest(localPivotArr,threadsInPartition,threadsInPartition/2-1);
 
-		int pivotElement = new_median(localPivotArr,threadsInPartition);
 		free(localPivotArr);
 #ifdef DEBUG
 		printf("Id is %d pivotElement is %d \n",myId,pivotElement);
