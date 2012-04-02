@@ -256,7 +256,7 @@ void * parallel_quick_sort(void * arg)
 		{
 			if(currentArr != inputArr)
 			{
-		//		printf("Id is %d Copying to output\n",myId);
+				//		printf("Id is %d Copying to output\n",myId);
 				memcpy(inputArr+start,mirrorArr+start,sizeof(int)*(numElements));
 			}
 			qsort(inputArr+start,numElements,sizeof(int),compare);
@@ -267,10 +267,38 @@ void * parallel_quick_sort(void * arg)
 		//printf("Id is %d Sending array ",myId);
 		//printArray(currentArr,start,end);
 		int localMedian;
+		int *a,n,k;
+		a=currentArr+start;
+		n = numElements;
 		if(numElements & 1)
-			localMedian = kth_smallest(currentArr+start,numElements,numElements/2);
+		{
+			k = numElements/2;
+		}
 		else
-			localMedian = kth_smallest(currentArr+start,numElements,numElements/2-1);
+		{
+			k = numElements/2-1;
+		}
+		int i,j,l,m ;
+		int x,temp ;
+		l=0 ; m=n-1 ;
+		while (l<m) {
+			x=a[k] ;
+			i=l ;
+			j=m ;
+			do {
+				while (a[i]<x) i++ ;
+				while (x<a[j]) j-- ;
+				if (i<=j) {
+					temp = a[i];
+					a[i] = a[j];
+					a[j] = temp;
+					i++ ; j-- ;
+				}
+			} while (i<=j) ;
+			if (j<k) l=i ;
+			if (k<i) m=j ;
+		}
+		localMedian = a[k];
 
 
 #ifdef DEBUG
@@ -291,18 +319,42 @@ void * parallel_quick_sort(void * arg)
 		//printf("Id is %d localPivotArr is",myId);
 		//printArray(localPivotArr,0,threadsInPartition-1);
 		int pivotElement;
+		a = localPivotArr;
+		n = threadsInPartition;
 		if(threadsInPartition&1)
-			pivotElement = kth_smallest(localPivotArr,threadsInPartition,threadsInPartition/2);
+			k=threadsInPartition/2;
 		else
-			pivotElement = kth_smallest(localPivotArr,threadsInPartition,threadsInPartition/2-1);
-		 free(localPivotArr);
+			k=threadsInPartition/2-1;
+		l=0 ; m=n-1 ;
+		while (l<m) {
+			x=a[k] ;
+			i=l ;
+			j=m ;
+			do {
+				while (a[i]<x) i++ ;
+				while (x<a[j]) j-- ;
+				if (i<=j) {
+					temp = a[i];
+					a[i] = a[j];
+					a[j] = temp;
+					i++ ; j-- ;
+				}
+			} while (i<=j) ;
+			if (j<k) l=i ;
+			if (k<i) m=j ;
+		}
+		pivotElement = a[k];
+
+
+
+
+		free(localPivotArr);
 #ifdef DEBUG
 		printf("Id is %d pivotElement is %d \n",myId,pivotElement);
 #endif
 		int firstIndex,secondIndex;
 		firstIndex = start;
 		secondIndex = start;
-		int temp;
 		while(secondIndex <= end)
 		{
 			//printf("Id is %d FirstIndex is %d SecondIndex is %d pivotElement is %d currentArr[secondIndex] is %d\n",myId,firstIndex,secondIndex,pivotElement,currentArr[secondIndex]);
@@ -482,7 +534,7 @@ void validate(int* output, int num_elements) {
 			return;
 		}
 	}
-//	printf("============= SORTED ===========\n");
+	//	printf("============= SORTED ===========\n");
 }
 
 int main()
@@ -503,7 +555,7 @@ int main()
 	for(i=0;i<MAX_NUM;i++)
 	{
 		inputArr[i] = rand() % (MAX_NUM/10);
-//		inputArr[i] = 1;
+		//		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
