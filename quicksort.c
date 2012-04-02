@@ -22,8 +22,8 @@
 #include <string.h>
 
 //#define DEBUG
-#define MAX_NUM 64
-#define MAX_THREADS 4
+#define MAX_NUM 10000000 
+#define MAX_THREADS 4 
 
 struct thread_info_type
 {
@@ -203,7 +203,7 @@ int kth_smallest(int a[], int n, int k)
 		if (j<k) l=i ;
 		if (k<i) m=j ;
 	}
-	return k;
+	return a[k];
 }
 
 int kth_smallest_with_pos(int a[], int n, int k,int pos[])
@@ -231,11 +231,11 @@ int kth_smallest_with_pos(int a[], int n, int k,int pos[])
 }
 
 
-/*int median(int a[], int n)
+int new_median(int a[], int n)
 {
 	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
 }
-
+/*
 
 int median_with_pos(int a[], int n,int pos[])
 {
@@ -397,7 +397,7 @@ void * parallel_quick_sort(void * arg)
 		{
 			if(currentArr != inputArr)
 			{
-				printf("Id is %d Copying to output\n",myId);
+		//		printf("Id is %d Copying to output\n",myId);
 				memcpy(inputArr+start,mirrorArr+start,sizeof(int)*(numElements));
 			}
 			qsort(inputArr+start,numElements,sizeof(int),compare);
@@ -408,7 +408,7 @@ void * parallel_quick_sort(void * arg)
 		//printf("Id is %d Sending array ",myId);
 		//printArray(currentArr,start,end);
 
-		int localMedian = median(currentArr+start,numElements);
+		int localMedian = new_median(currentArr+start,numElements);
 
 #ifdef DEBUG
 		printf("Id is %d localMedian is %d\n",myId,localMedian);
@@ -428,7 +428,7 @@ void * parallel_quick_sort(void * arg)
 		//printf("Id is %d localPivotArr is",myId);
 		//printArray(localPivotArr,0,threadsInPartition-1);
 
-		int pivotElement = median(localPivotArr,threadsInPartition);
+		int pivotElement = new_median(localPivotArr,threadsInPartition);
 		free(localPivotArr);
 #ifdef DEBUG
 		printf("Id is %d pivotElement is %d \n",myId,pivotElement);
@@ -520,7 +520,7 @@ void * parallel_quick_sort(void * arg)
 		//partition for next iteration
 		if(myId == leaderId)
 		{
-			printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
+			//printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
 			//int pivotIndex = median(currentArr+start,totalLessElements);
 			//pivotIndex+=start;
 			//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
@@ -613,7 +613,7 @@ void validate(int* output, int num_elements) {
 			return;
 		}
 	}
-	printf("============= SORTED ===========\n");
+//	printf("============= SORTED ===========\n");
 }
 
 int main()
@@ -632,8 +632,8 @@ int main()
 	//srand(9999);
 	for(int i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % MAX_NUM;
-		//inputArr[i] = i+1;
+		//inputArr[i] = rand() % (MAX_NUM/10);
+		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
 	}
@@ -659,7 +659,7 @@ int main()
 
 	double ptime =(double)end_time - (double)start_time;
 
-	printf("Parallel Time is %lf\n",ptime);
+//	printf("Parallel Time is %lf\n",ptime);
 
 	gettimeofday(&tz, &tx);
 	start_time = (double)tz.tv_sec + (double) tz.tv_usec / 1000000.0;
@@ -669,7 +669,7 @@ int main()
 	validate(checkArr, MAX_NUM);
 
 	double stime = ((double)end_time - (double)start_time);
-	printf("Serial Time is %lf\n",stime);
+//	printf("Serial Time is %lf\n",stime);
 	printf("Speedup is %lf\n",stime/ptime);
 
 	for(int i=0;i<MAX_NUM;i++)
