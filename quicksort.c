@@ -74,7 +74,10 @@ int kth_smallest(int a[], int n, int k)
 			while (a[i]<x) i++ ;
 			while (x<a[j]) j-- ;
 			if (i<=j) {
-				swap(&a[i],&a[j]) ;
+
+				int temp = a[i];
+				a[i] = a[j];
+				a[j] = temp;
 				i++ ; j-- ;
 			}
 		} while (i<=j) ;
@@ -273,7 +276,9 @@ void * parallel_quick_sort(void * arg)
 
 			if(currentArr[secondIndex] <= pivotElement)
 			{
-				swap(&currentArr[firstIndex],&currentArr[secondIndex]);
+				int temp = currentArr[firstIndex];
+				currentArr[firstIndex] = currentArr[secondIndex];
+				currentArr[secondIndex] = temp;
 				firstIndex++;
 			}
 			secondIndex++;
@@ -421,10 +426,7 @@ void * parallel_quick_sort(void * arg)
 		else
 			pthread_barrier_wait(&ownBarr[myId]);
 
-		if(ping==1)
-			ping=0;
-		else
-			ping=1;
+		ping=!ping;
 	}
 }
 
