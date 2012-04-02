@@ -22,17 +22,25 @@
 #include <string.h>
 
 //#define DEBUG
-#define MAX_NUM 64
+#define MAX_NUM 10000000
 #define MAX_THREADS 4
 
 struct thread_info_type
 {
+	int *inputArr;
+	int *lsumArr;
+	int *rsumArr;
+	int *mirrorArr;
 	int start; // starting index of array
 	int end; // ending index of array
+	int threadId;
 	int leaderId;
+	int pivotIndex;
 	int threadsInPartition;
 	int totalElementsInPartition;
-	int *inputArr;
+	pthread_barrier_t *commonBarr;
+	pthread_barrier_t *ownBarr;
+	int *pivotElementArr;
 
 };
 
@@ -48,62 +56,116 @@ int compare (const void * a, const void * b)
 	return ( *(int*)a - *(int*)b );
 }
 
-int *lsumArr;
-int *rsumArr;
-int *mirrorArr;
-pthread_barrier_t *commonBarr;
-pthread_barrier_t *ownBarr;
-int *pivotElementArr;
 
 
 void * parallel_quick_sort(void *);
 void printArray(int arr[],int start,int end);
-void swap(int *x,int *y);
 void validate(int* output, int num_elements);
 
+int kth_smallest(int a[], int n, int k)
+{
+	int i,j,l,m ;
+	int x,temp ;
+	l=0 ; m=n-1 ;
+	while (l<m) {
+		x=a[k] ;
+		i=l ;
+		j=m ;
+		do {
+			while (a[i]<x) i++ ;
+			while (x<a[j]) j-- ;
+			if (i<=j) {
+				temp = a[i];
+				a[i] = a[j];
+				a[j] = temp;
+				i++ ; j-- ;
+			}
+		} while (i<=j) ;
+		if (j<k) l=i ;
+		if (k<i) m=j ;
+	}
+	return a[k];
+}
 
+int new_median(int a[], int n)
+{
+	return kth_smallest(a,n,(((n)&1)?((n)/2):(((n)/2)-1)));
+}
+
+void printArray(int arr[],int start,int end)
+{
+	int i;
+	for(i=start;i<=end;i++)
+		printf("%d ",arr[i]);
+	printf("\n");
+}
 
 int *pqsort(int* inputArr, int numElements, int numThreads)
 {
-
-	lsumArr = (int *)malloc(sizeof(int)*numThreads);
-	//assert (lsumArr!=NULL);
-	rsumArr = (int *)malloc(sizeof(int)*numThreads);
-	//assert (rsumArr!=NULL);
-	commonBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
-	//assert (commonBarr!=NULL);
-	ownBarr = (pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads);
-	//assert (ownBarr!=NULL);
-	mirrorArr = (int *)malloc(sizeof(int)*numElements);
-	//assert (mirrorArr!=NULL);
-	pivotElementArr = (int *)malloc(sizeof(int)*numThreads);
-	//assert(pivotElementArr!=NULL);
-
+  //int sumArrSize = pow(2,ceil(log2(numThreads)));
+	int *lsumArr = (int *)malloc(sizeof(int)*numThreads);
+	assert (lsumArr!=NULL);
+	int *rsumArr = (int *)malloc(sizeof(int)*numThreads);
+	assert (rsumArr!=NULL);
+	pthread_barrier_t * commonBarr =(pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads) ;
+	assert(commonBarr!=NULL);
+	pthread_barrier_t * ownBarr =(pthread_barrier_t *)malloc(sizeof(pthread_barrier_t)*numThreads) ;
+	assert(ownBarr!=NULL);
+	int *mirrorArr = (int *)malloc(sizeof(int)*numElements);
+	assert (mirrorArr!=NULL);
 	int i;
 	for(i=0;i<numThreads;i++)
-		pthread_barrier_init(&ownBarr[i], NULL, 2);
-	pthread_barrier_init(&commonBarr[0], NULL, MAX_THREADS);
-
+	{
+		if(pthread_barrier_init(&ownBarr[i], NULL, 2))
+		{
+			printf("Could not create barrier %d\n",i);
+		}
+	}
+	if(pthread_barrier_init(&commonBarr[0], NULL, numThreads))
+	{
+		printf("Could not create barrier %d\n",0);
+	}
 	//cout << "Input array is " << endl;
 	//printArray(a,numElements);
 
 	pthread_t *p_threads= (pthread_t *)malloc(sizeof(pthread_t)*numThreads);
-	//assert (p_threads!=NULL);
+	assert (p_threads!=NULL);
 	int elementsPerThread = numElements/numThreads;
 	int excessElements = numElements%numThreads;
 
 	struct thread_info_type *threadInfoArr = (struct thread_info_type *)malloc(sizeof(struct thread_info_type)*numThreads);
-	//assert (threadInfoArr!=NULL);
+	assert (threadInfoArr!=NULL);
 	int lastIndex = 0;
+
+	//bring median to position zero
+	//int pivotIndex = median(inputArr,numElements);
+	//swap(&inputArr[0],&inputArr[pivotIndex]);
+	//printf("Pivot position is %d\n",pivotIndex);
+
+	int *pivotElementArr = (int *)malloc(sizeof(int)*numThreads);
+	assert(pivotElementArr!=NULL);
+	int *pivotIndexArr = (int *)malloc(sizeof(int)*numThreads);
+	assert(pivotIndexArr!=NULL);
+
+
+
 
 	// assign ranges and create threads
 	for(i=0;i<numThreads;i++)
 	{
 		threadInfoArr[i].totalElementsInPartition = numElements;
+		threadInfoArr[i].threadId = i;
 		threadInfoArr[i].start = lastIndex;
 		threadInfoArr[i].leaderId = 0; // initially thread 0 is leader
-		threadInfoArr[i].threadsInPartition = numThreads;
 		threadInfoArr[i].inputArr = inputArr;
+		threadInfoArr[i].lsumArr = lsumArr;
+		threadInfoArr[i].rsumArr = rsumArr;
+		threadInfoArr[i].pivotIndex = 0; // pivot is at position 0
+		threadInfoArr[i].mirrorArr = mirrorArr;
+		threadInfoArr[i].commonBarr = commonBarr;
+		threadInfoArr[i].ownBarr = ownBarr;
+		threadInfoArr[i].threadsInPartition = numThreads;
+		threadInfoArr[i].pivotElementArr = pivotElementArr;
 		lastIndex+= (elementsPerThread -1);
 		if(excessElements > 0)
 		{
@@ -114,7 +176,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 		lastIndex++; // increment lastIndex so that it is ready for next iteration
 	}
 	struct thread_local_type * threadLocalArr = (struct thread_local_type *)malloc(sizeof(struct thread_local_type)*numThreads);
-	//assert (threadLocalArr!=NULL);
+	assert (threadLocalArr!=NULL);
 	for(i=0;i<numThreads;i++)
 	{
 		threadLocalArr[i].myId = i;
@@ -132,17 +194,7 @@ int *pqsort(int* inputArr, int numElements, int numThreads)
 	free(mirrorArr);
 	free(pivotElementArr);
 
-	//cout << "Prefix Sum array is " << endl;
-	//printArray(a,numElements);
-}
-
-
-void printArray(int arr[],int start,int end)
-{
-	int i;
-	for(i=start;i<=end;i++)
-		printf("%d ",arr[i]);
-	printf("\n");
+  	return inputArr;
 }
 
 void * parallel_quick_sort(void * arg)
@@ -151,11 +203,19 @@ void * parallel_quick_sort(void * arg)
 	int i;
 	struct thread_local_type threadLocal = *((struct thread_local_type *)arg);
 	struct thread_info_type * threadInfoArr = threadLocal.threadInfoArr;
+	int *inputArr = threadInfoArr[threadLocal.myId].inputArr;
+	int *lsumArr = threadInfoArr[threadLocal.myId].lsumArr;
+	int *rsumArr = threadInfoArr[threadLocal.myId].rsumArr;
+	int *mirrorArr = threadInfoArr[threadLocal.myId].mirrorArr;
+	int *pivotElementArr = threadInfoArr[threadLocal.myId].pivotElementArr;
+
 	int myId = threadLocal.myId;
 
+	pthread_barrier_t *commonBarr = threadInfoArr[threadLocal.myId].commonBarr;
+	pthread_barrier_t *ownBarr = threadInfoArr[threadLocal.myId].ownBarr;
 	int *currentArr;
 	int *currentMirrorArr;
-	int *inputArr = threadInfoArr[myId].inputArr;
+
 	int ping=1;
 
 	while(1)
@@ -195,6 +255,8 @@ void * parallel_quick_sort(void * arg)
 		}
 
 		//find pivot across threads
+		//printf("Id is %d Sending array ",myId);
+		//printArray(currentArr,start,end);
 		int localMedian;
 		int *a,n,k;
 		a=currentArr+start;
@@ -207,8 +269,8 @@ void * parallel_quick_sort(void * arg)
 		{
 			k = numElements/2-1;
 		}
-		int i,j,l,m ;
-		int x,temp ;
+		register int i,j,l,m ;
+		register int x,temp ;
 		l=0 ; m=n-1 ;
 		while (l<m) {
 			x=a[k] ;
@@ -230,215 +292,224 @@ void * parallel_quick_sort(void * arg)
 		localMedian = a[k];
 
 
-
 #ifdef DEBUG
-printf("Id is %d localMedian is %d\n",myId,localMedian);
+		printf("Id is %d localMedian is %d\n",myId,localMedian);
 #endif
-pivotElementArr[myId] = localMedian;
-//wait for everyone
-pthread_barrier_wait(&commonBarr[leaderId]);
-/*if(myId==leaderId)
+
+		pivotElementArr[myId] = localMedian;
+		//wait for everyone
+		pthread_barrier_wait(&commonBarr[leaderId]);
+		/*if(myId==leaderId)
 		{
 			printf("Id is %d pivotElementArr is",myId);
 			printArray(pivotElementArr,leaderId,leaderId+threadsInPartition-1);
 		}*/
 
-int *localPivotArr = (int *)malloc(sizeof(int)*threadsInPartition);
-memcpy(localPivotArr,pivotElementArr+leaderId,threadsInPartition*sizeof(int));
-//printf("Id is %d localPivotArr is",myId);
-//printArray(localPivotArr,0,threadsInPartition-1);
-int pivotElement;
-a = localPivotArr;
-n = threadsInPartition;
-if(threadsInPartition&1)
-	k=threadsInPartition/2;
-else
-	k=threadsInPartition/2-1;
-l=0 ; m=n-1 ;
-while (l<m) {
-	x=a[k] ;
-	i=l ;
-	j=m ;
-	do {
-		while (a[i]<x) i++ ;
-		while (x<a[j]) j-- ;
-		if (i<=j) {
-			temp = a[i];
-			a[i] = a[j];
-			a[j] = temp;
-			i++ ; j-- ;
+		int *localPivotArr = (int *)malloc(sizeof(int)*threadsInPartition);
+		memcpy(localPivotArr,pivotElementArr+leaderId,threadsInPartition*sizeof(int));
+		//printf("Id is %d localPivotArr is",myId);
+		//printArray(localPivotArr,0,threadsInPartition-1);
+		int pivotElement;
+		a = localPivotArr;
+		n = threadsInPartition;
+		if(threadsInPartition&1)
+			k=threadsInPartition/2;
+		else
+			k=threadsInPartition/2-1;
+		l=0 ; m=n-1 ;
+		while (l<m) {
+			x=a[k] ;
+			i=l ;
+			j=m ;
+			do {
+				while (a[i]<x) i++ ;
+				while (x<a[j]) j-- ;
+				if (i<=j) {
+					temp = a[i];
+					a[i] = a[j];
+					a[j] = temp;
+					i++ ; j-- ;
+				}
+			} while (i<=j) ;
+			if (j<k) l=i ;
+			if (k<i) m=j ;
 		}
-	} while (i<=j) ;
-	if (j<k) l=i ;
-	if (k<i) m=j ;
-}
-pivotElement = a[k];
-free(localPivotArr);
+		pivotElement = a[k];
+
+
+
+
+		free(localPivotArr);
 #ifdef DEBUG
-printf("Id is %d pivotElement is %d \n",myId,pivotElement);
+		printf("Id is %d pivotElement is %d \n",myId,pivotElement);
 #endif
-int firstIndex,secondIndex;
-firstIndex = start;
-secondIndex = start;
-while(secondIndex <= end)
-{
-	//printf("Id is %d FirstIndex is %d SecondIndex is %d pivotElement is %d currentArr[secondIndex] is %d\n",myId,firstIndex,secondIndex,pivotElement,currentArr[secondIndex]);
-
-	if(currentArr[secondIndex] <= pivotElement)
-	{
-		int temp = currentArr[firstIndex];
-		currentArr[firstIndex] = currentArr[secondIndex];
-		currentArr[secondIndex] = temp;
-		firstIndex++;
-	}
-	secondIndex++;
-}
-
-//printf("Id is %d FirstIndex is %d SecondIndex is %d\n",myId,firstIndex,secondIndex);
-
-int numLessElements,numGreaterElements,lessStartIndex,greaterStartIndex;
-numLessElements = firstIndex - start;
-numGreaterElements = numElements - numLessElements;
-lessStartIndex = start;
-greaterStartIndex = firstIndex;
-
-lsumArr[myId] = numLessElements;
-rsumArr[myId] = numGreaterElements;
-pthread_barrier_wait(&commonBarr[leaderId]);
-
-
-#ifdef DEBUG
-if(myId == leaderId)
-{
-	printf("Id is %d CurrentArr is\n",myId);
-	printArray(currentArr,start,start+totalElementsInPartition-1);
-	printf("Id is %d lsumArr is\n",myId);
-	printArray(lsumArr,leaderId,leaderId+threadsInPartition-1);
-	printf("Id is %d rsumArr is\n",myId);
-	printArray(rsumArr,leaderId,leaderId+threadsInPartition-1);
-
-}
-#endif
-//prefix sum for less than and greater than
-if(myId == leaderId)
-{
-	for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
-	{
-		lsumArr[i]+=lsumArr[i-1];
-		rsumArr[i]+=rsumArr[i-1];
-	}
-
-}
-pthread_barrier_wait(&commonBarr[leaderId]);
-
-int offset = threadInfoArr[leaderId].start;
-//int offset = 0;
-int targetLessStartIndex = lsumArr[myId]-numLessElements;
-int targetGreaterStartIndex = lsumArr[leaderId+threadsInPartition-1]+rsumArr[myId]-numGreaterElements;
-memcpy(currentMirrorArr+offset+targetLessStartIndex,currentArr+lessStartIndex,numLessElements*sizeof(int));
-memcpy(currentMirrorArr+offset+targetGreaterStartIndex,currentArr+greaterStartIndex,numGreaterElements*sizeof(int));
-// wait for everyone to copy
-pthread_barrier_wait(&commonBarr[leaderId]);
-#ifdef DEBUG
-if(myId == leaderId)
-{
-	printf("After memcpy CurrentMirrorArr is",myId);
-	printArray(currentMirrorArr,start,start+totalElementsInPartition-1);
-}
-#endif
-
-
-
-int totalLessElements = lsumArr[leaderId+threadsInPartition-1];
-int totalGreaterElements = rsumArr[leaderId+threadsInPartition-1];
-int lessThreads = round((double)totalLessElements / (totalElementsInPartition-1) * threadsInPartition);
-if(totalLessElements>0 && lessThreads < 1)
-	lessThreads=1;
-if(lessThreads == threadsInPartition)
-	lessThreads--;
-
-int greaterThreads = threadsInPartition - lessThreads;
-if(greaterThreads == threadsInPartition)
-{
-	lessThreads++;
-	greaterThreads--;
-}
-//partition for next iteration
-if(myId == leaderId)
-{
-	//printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
-	//int pivotIndex = median(currentArr+start,totalLessElements);
-	//pivotIndex+=start;
-	//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
-	//assert(pivotIndex < (start+totalLessElements));
-	//swap(&currentArr[start],&currentArr[pivotIndex]);
-	int lastIndex = start,elementsPerThread,excessElements;
-	if(lessThreads!=0)
-	{
-
-		elementsPerThread = totalLessElements/lessThreads;
-		excessElements = totalLessElements%lessThreads;
-
-		for(i=leaderId;i<(leaderId+lessThreads);i++)
+		int firstIndex,secondIndex;
+		firstIndex = start;
+		secondIndex = start;
+		while(secondIndex <= end)
 		{
-			threadInfoArr[i].start = lastIndex;
-			lastIndex+= (elementsPerThread -1);
-			if(excessElements > 0)
+			//printf("Id is %d FirstIndex is %d SecondIndex is %d pivotElement is %d currentArr[secondIndex] is %d\n",myId,firstIndex,secondIndex,pivotElement,currentArr[secondIndex]);
+
+			if(currentArr[secondIndex] <= pivotElement)
 			{
-				lastIndex++;
-				excessElements--;
+				temp = currentArr[secondIndex];
+				currentArr[secondIndex] = currentArr[firstIndex];
+				currentArr[firstIndex] = temp;
+				firstIndex++;
 			}
-			threadInfoArr[i].end = lastIndex;
-			lastIndex++; // increment lastIndex so that it is ready for next iteration
-			threadInfoArr[i].threadsInPartition = lessThreads;
-			threadInfoArr[i].totalElementsInPartition = totalLessElements;
+			secondIndex++;
 		}
-		pthread_barrier_destroy(&commonBarr[leaderId]);
-		pthread_barrier_init(&commonBarr[leaderId], NULL, lessThreads);
-	}
 
-	if(greaterThreads!=0)
-	{
+		//printf("Id is %d FirstIndex is %d SecondIndex is %d\n",myId,firstIndex,secondIndex);
 
-		elementsPerThread = totalGreaterElements/greaterThreads;
-		excessElements = totalGreaterElements%greaterThreads;
-		int greaterPivotPosition = lastIndex;
+		int numLessElements,numGreaterElements,lessStartIndex,greaterStartIndex;
+		numLessElements = firstIndex - start;
+		numGreaterElements = numElements - numLessElements;
+		lessStartIndex = start;
+		greaterStartIndex = firstIndex;
 
-		//pivotIndex = median(currentArr+greaterPivotPosition,totalGreaterElements);
-		//pivotIndex+=greaterPivotPosition;
-		//assert(pivotIndex < (greaterPivotPosition+totalGreaterElements));
-		//swap(&currentArr[greaterPivotPosition],&currentArr[pivotIndex]);
-		//printf("Id is %d Pivot for right partition is %d\n",myId,pivotIndex);
+		lsumArr[myId] = numLessElements;
+		rsumArr[myId] = numGreaterElements;
+		pthread_barrier_wait(&commonBarr[leaderId]);
 
-		for(i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
+
+#ifdef DEBUG
+		if(myId == leaderId)
 		{
-			threadInfoArr[i].start = lastIndex;
-			lastIndex+= (elementsPerThread -1);
-			if(excessElements > 0)
-			{
-				lastIndex++;
-				excessElements--;
-			}
-			threadInfoArr[i].end = lastIndex;
-			lastIndex++; // increment lastIndex so that it is ready for next iteration
-			threadInfoArr[i].threadsInPartition = greaterThreads;
-			threadInfoArr[i].totalElementsInPartition = totalGreaterElements;
-			threadInfoArr[i].leaderId = leaderId+lessThreads;
+			printf("Id is %d CurrentArr is\n",myId);
+			printArray(currentArr,start,start+totalElementsInPartition-1);
+			printf("Id is %d lsumArr is\n",myId);
+			printArray(lsumArr,leaderId,leaderId+threadsInPartition-1);
+			printf("Id is %d rsumArr is\n",myId);
+			printArray(rsumArr,leaderId,leaderId+threadsInPartition-1);
 
 		}
-		//change barrier for right partition leader
-		pthread_barrier_init(&commonBarr[leaderId+lessThreads], NULL, greaterThreads);
-	}
-	//wake up other threads
-	for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
-		pthread_barrier_wait(&ownBarr[i]);
-}
-else
-	pthread_barrier_wait(&ownBarr[myId]);
+#endif
+		//prefix sum for less than and greater than
+		if(myId == leaderId)
+		{
+			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
+			{
+				lsumArr[i]+=lsumArr[i-1];
+				rsumArr[i]+=rsumArr[i-1];
+			}
 
-ping=!ping;
+		}
+		pthread_barrier_wait(&commonBarr[leaderId]);
+
+		int offset = threadInfoArr[leaderId].start;
+		//int offset = 0;
+		int targetLessStartIndex = lsumArr[myId]-numLessElements;
+		int targetGreaterStartIndex = lsumArr[leaderId+threadsInPartition-1]+rsumArr[myId]-numGreaterElements;
+		memcpy(currentMirrorArr+offset+targetLessStartIndex,currentArr+lessStartIndex,numLessElements*sizeof(int));
+		memcpy(currentMirrorArr+offset+targetGreaterStartIndex,currentArr+greaterStartIndex,numGreaterElements*sizeof(int));
+		// wait for everyone to copy
+		pthread_barrier_wait(&commonBarr[leaderId]);
+#ifdef DEBUG
+		if(myId == leaderId)
+		{
+			printf("After memcpy CurrentMirrorArr is",myId);
+			printArray(currentMirrorArr,start,start+totalElementsInPartition-1);
+		}
+#endif
+
+
+
+		int totalLessElements = lsumArr[leaderId+threadsInPartition-1];
+		int totalGreaterElements = rsumArr[leaderId+threadsInPartition-1];
+		int lessThreads = round((double)totalLessElements / (totalElementsInPartition-1) * threadsInPartition);
+		if(totalLessElements>0 && lessThreads < 1)
+			lessThreads=1;
+		if(lessThreads == threadsInPartition)
+			lessThreads--;
+
+		int greaterThreads = threadsInPartition - lessThreads;
+		if(greaterThreads == threadsInPartition)
+		{
+			lessThreads++;
+			greaterThreads--;
+		}
+		//partition for next iteration
+		if(myId == leaderId)
+		{
+			//printf("Less Threads %d totalLessElements %d Greater Threads %d totalGreaterElements %d\n",lessThreads,totalLessElements,greaterThreads,totalGreaterElements);
+			//int pivotIndex = median(currentArr+start,totalLessElements);
+			//pivotIndex+=start;
+			//printf("Id is %d Pivot for left partition is %d start is %d\n",myId,pivotIndex,start);
+			//assert(pivotIndex < (start+totalLessElements));
+			//swap(&currentArr[start],&currentArr[pivotIndex]);
+			int lastIndex = start,elementsPerThread,excessElements;
+			if(lessThreads!=0)
+			{
+
+				elementsPerThread = totalLessElements/lessThreads;
+				excessElements = totalLessElements%lessThreads;
+
+				for(i=leaderId;i<(leaderId+lessThreads);i++)
+				{
+					threadInfoArr[i].start = lastIndex;
+					lastIndex+= (elementsPerThread -1);
+					if(excessElements > 0)
+					{
+						lastIndex++;
+						excessElements--;
+					}
+					threadInfoArr[i].end = lastIndex;
+					lastIndex++; // increment lastIndex so that it is ready for next iteration
+					threadInfoArr[i].threadsInPartition = lessThreads;
+					threadInfoArr[i].totalElementsInPartition = totalLessElements;
+				}
+				pthread_barrier_destroy(&commonBarr[leaderId]);
+				pthread_barrier_init(&commonBarr[leaderId], NULL, lessThreads);
+			}
+
+			if(greaterThreads!=0)
+			{
+
+				elementsPerThread = totalGreaterElements/greaterThreads;
+				excessElements = totalGreaterElements%greaterThreads;
+				int greaterPivotPosition = lastIndex;
+
+				//pivotIndex = median(currentArr+greaterPivotPosition,totalGreaterElements);
+				//pivotIndex+=greaterPivotPosition;
+				//assert(pivotIndex < (greaterPivotPosition+totalGreaterElements));
+				//swap(&currentArr[greaterPivotPosition],&currentArr[pivotIndex]);
+				//printf("Id is %d Pivot for right partition is %d\n",myId,pivotIndex);
+
+				for(i=(leaderId+lessThreads);i<(leaderId+lessThreads+greaterThreads);i++)
+				{
+					threadInfoArr[i].start = lastIndex;
+					lastIndex+= (elementsPerThread -1);
+					if(excessElements > 0)
+					{
+						lastIndex++;
+						excessElements--;
+					}
+					threadInfoArr[i].end = lastIndex;
+					lastIndex++; // increment lastIndex so that it is ready for next iteration
+					threadInfoArr[i].threadsInPartition = greaterThreads;
+					threadInfoArr[i].totalElementsInPartition = totalGreaterElements;
+					threadInfoArr[i].leaderId = leaderId+lessThreads;
+					threadInfoArr[i].pivotIndex = greaterPivotPosition;
+
+				}
+				//change barrier for right partition leader
+				pthread_barrier_init(&commonBarr[leaderId+lessThreads], NULL, greaterThreads);
+			}
+			//wake up other threads
+			for(i=leaderId+1;i < (leaderId+threadsInPartition);i++)
+				pthread_barrier_wait(&ownBarr[i]);
+		}
+		else
+			pthread_barrier_wait(&ownBarr[myId]);
+
+		if(ping==1)
+			ping=0;
+		else
+			ping=1;
 	}
 }
+
 
 void swap(int *x,int *y)
 {
@@ -475,7 +546,7 @@ int main()
 	int i;
 	for(i=0;i<MAX_NUM;i++)
 	{
-		inputArr[i] = rand() % (MAX_NUM);
+		inputArr[i] = rand() % (MAX_NUM/10);
 		//		inputArr[i] = 1;
 		checkArr[i] = inputArr[i];
 		checkArr2[i] = inputArr[i];
@@ -534,7 +605,5 @@ int main()
 	 */
 
 }
-
-
 
 
